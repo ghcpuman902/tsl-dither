@@ -1,0 +1,37 @@
+---
+alwaysApply: true
+---
+# Web Worker for image processing
+
+All CPU-intensive image processing (dither, histogram, tone fallback) runs in a dedicated **Web Worker** so the main thread stays responsive.
+
+## Architecture
+
+- **Worker file**: `src/lib/processing.worker.ts` — handles `set-source`, `dither`, `histogram`, `tone` messages.
+- **Message types**: `src/lib/worker-types.ts` — shared `WorkerRequest` and `WorkerResponse` types. Every request has a monotonic `id`; the main thread discards responses where `response.id !== latestRequestId` for that operation.
+- **Hook**: `src/lib/use-processing-worker.ts` — creates the worker on mount, terminates on unmount, exposes `setSource`, `requestDither`, `requestHistogram`, `requestTone` and state `ditherResult`, `histogramResult`, `toneResult`.
+- **Context**: `src/lib/processing-worker-context.tsx` — provides the hook return value to the tree. Used by `EditorLayout`, `DitherPreview`, `Histogram`.
+
+## Message protocol
+
+- **Main → Worker**: send copies of buffers (never transfer); main thread keeps its data for display. Use `buffer.slice(...)` when posting.
+- **Worker → Main**: worker may transfer result ArrayBuffers (zero-copy) via the second argument to `postMessage(msg, [buffer1, ...])`. After transfer, the buffer is detached — do not read it again in the worker.
+- **Stale responses**: when sending a new request, increment the operation’s request ID. In the message handler, ignore responses whose `id` is not equal to the current ref value for that operation.
+
+## Adding a new operation
+
+1. **Types** (`src/lib/worker-types.ts`): add a request variant to `WorkerRequest` and a response variant to `WorkerResponse`, each with an `id` field.
+2. **Worker** (`src/lib/processing.worker.ts`): in `self.onmessage`, add a `case` that runs the new logic and calls `postResponse(...)` (use transfer list for large buffers).
+3. **Hook** (`src/lib/use-processing-worker.ts`): add a ref for the new operation’s latest request ID and a `pendingXxxTimeRef` if you want debug timing. Add a handler branch for the new response type and update state. Expose `requestXxx` and `xxxResult` in the return value.
+
+## Debugging
+
+- **Breakpoints**: Chrome DevTools → Sources → Threads / Workers → select the processing worker to set breakpoints in `processing.worker.ts`.
+- **Logging**: in development, the hook logs `[Worker] <type> request #<id> sent` and `[Worker] <type> result #<id> received (<X>ms)` to the console.
+- **No DOM in worker**: the worker cannot access `window`, `document`, or canvas. Only pure data (buffers, typed arrays, plain objects) and the processing libs (`dither-processor`, `tone-processor`) are available.
+
+## Pitfalls
+
+- After transferring an ArrayBuffer to the main thread, it is detached in the worker — do not use it again.
+- `ImageData` cannot be transferred; send `buffer` + `width` + `height` and reconstruct with `new ImageData(new Uint8ClampedArray(buffer), width, height)` on the receiving side.
+- Worker is created with `new Worker(new URL("./processing.worker.ts", import.meta.url), { type: "module" })` so the bundler can emit a separate worker chunk; keep this pattern for Next.js to recognize the worker.

@@ -1,0 +1,4 @@
+---
+alwaysApply: false
+---
+When writing Three.js shaders or point-cloud/WebGPU code, follow the TSL (Three.js Shading Language) rules in .cursor/knowledge/tsl.md. Use `three/webgpu` and `three/tsl`; never `three/nodes` or the WebGL renderer. Always await `renderer.init()` before first render.
