@@ -18,25 +18,27 @@ const DITHER_METHODS: { id: DitherMethod; label: string }[] = [
   { id: "stucki", label: "Stucki" },
 ];
 
+const BAYER_SIZES = [2, 4, 8] as const;
+
 const INTROS: Record<DitherMethod, string> = {
   threshold:
     "Binary cutoff per channel: each R, G, B is 255 if at or above the threshold, else 0. Combined they give up to 8 colors.",
   "white-noise":
     "Randomized binary per channel: the cutoff is perturbed by noise so the result is grainier. Density controls how strong the noise is.",
   bayer:
-    "Ordered dither using a precomputed Bayer matrix. Grid size sets the matrix dimensions. (Coming soon: full implementation.)",
+    "Ordered dither using a Bayer threshold matrix (2×2, 4×4, or 8×8). Larger matrices yield finer patterns; each channel is quantized independently.",
   atkinson:
-    "Atkinson error diffusion: distributes quantization error to neighbors with a 1/8 fraction. (Coming soon.)",
+    "Atkinson error diffusion: spreads quantization error to six neighbors with 1/8 weights (part of the error is intentionally discarded for a lighter look).",
   burkes:
-    "Burkes error diffusion with a 3-4-3 row pattern. (Coming soon.)",
+    "Burkes error diffusion: a two-row kernel (divisor 32) that diffuses error across a wider horizontal span than Floyd–Steinberg.",
   "floyd-steinberg":
-    "Classic Floyd–Steinberg error diffusion to adjacent pixels. (Coming soon.)",
+    "Classic Floyd–Steinberg error diffusion: error is distributed to four neighbors on the next rows for smooth gradients.",
   jjn:
-    "Jarvis, Judice & Ninke: 3-row error diffusion. (Coming soon.)",
+    "Jarvis, Judice & Ninke: three-row error diffusion (divisor 48) with a wide kernel for very smooth results.",
   sierra:
-    "Sierra-family error diffusion (e.g. 2-4-8). (Coming soon.)",
+    "Sierra error diffusion: a three-row, 10-neighbor kernel (divisor 32) balancing quality and spread.",
   stucki:
-    "Stucki 5×5 error diffusion. (Coming soon.)",
+    "Stucki error diffusion: a large five-column, three-row kernel (divisor 42) for high-quality diffusion.",
 };
 
 export const DitherStage = () => {
@@ -53,6 +55,9 @@ export const DitherStage = () => {
       handleMethodClick(id);
     }
   };
+
+  const normalizedBayerSize: (typeof BAYER_SIZES)[number] =
+    bayerSize <= 2 ? 2 : bayerSize <= 4 ? 4 : 8;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -144,34 +149,42 @@ export const DitherStage = () => {
 
         {method === "bayer" && (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium" htmlFor="dither-bayer-size">
-                Grid size
-              </Label>
-              <span className="tabular-nums text-xs text-muted-foreground">
-                {bayerSize}
-              </span>
-            </div>
-            <Slider
-              id="dither-bayer-size"
-              min={2}
-              max={8}
-              step={1}
-              value={[bayerSize]}
-              onValueChange={(v) =>
-                updateDither({ bayerSize: Array.isArray(v) ? v[0] : v })
-              }
+            <span className="text-xs font-medium text-foreground">Matrix size</span>
+            <div
+              className="flex flex-wrap gap-1 rounded-lg border border-border p-1"
+              role="tablist"
               aria-label="Bayer matrix size"
-            />
+            >
+              {BAYER_SIZES.map((size) => {
+                const selected = normalizedBayerSize === size;
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-label={`Bayer ${size} by ${size} matrix`}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => updateDither({ bayerSize: size })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        updateDither({ bayerSize: size });
+                      }
+                    }}
+                    className={cn(
+                      "min-w-12 rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      selected
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    {size}×{size}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        )}
-
-        {["atkinson", "burkes", "floyd-steinberg", "jjn", "sierra", "stucki"].includes(
-          method
-        ) && (
-          <p className="text-xs italic text-muted-foreground">
-            Controls for this method will appear here when implemented.
-          </p>
         )}
       </div>
     </div>

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePipeline } from "@/lib/pipeline-context";
 import { useProcessingWorkerContext } from "@/lib/processing-worker-context";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+import { drawImageDataToCanvas, drawRgbaBufferToCanvas, type CanvasPreviewMode } from "@/lib/canvas-preview";
 
 type Props = {
   processedImageData: ImageData | null;
@@ -20,73 +22,32 @@ const CHANNEL_CELLS: { kind: ChannelKind; label: string }[] = [
 
 const INCOMING_CSS = 200;
 
-const drawImageDataFit = (
-  canvas: HTMLCanvasElement,
-  imageData: ImageData,
-  cssW: number,
-  cssH: number
-) => {
-  const ctx = canvas.getContext("2d");
-  if (!ctx || cssW <= 0 || cssH <= 0) return;
-  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  const pxW = Math.round(cssW * dpr);
-  const pxH = Math.round(cssH * dpr);
-  canvas.width = pxW;
-  canvas.height = pxH;
-  const { width: srcW, height: srcH } = imageData;
-  const scale = Math.min(pxW / srcW, pxH / srcH);
-  const drawW = Math.max(1, Math.round(srcW * scale));
-  const drawH = Math.max(1, Math.round(srcH * scale));
-  const offscreen = document.createElement("canvas");
-  offscreen.width = srcW;
-  offscreen.height = srcH;
-  const offCtx = offscreen.getContext("2d");
-  if (!offCtx) return;
-  offCtx.putImageData(imageData, 0, 0);
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, pxW, pxH);
-  ctx.imageSmoothingEnabled = false;
-  const x = (pxW - drawW) / 2;
-  const y = (pxH - drawH) / 2;
-  ctx.drawImage(offscreen, 0, 0, srcW, srcH, x, y, drawW, drawH);
-};
-
-const drawBufferFit = (
-  canvas: HTMLCanvasElement,
-  buffer: ArrayBuffer,
-  width: number,
-  height: number,
-  cssW: number,
-  cssH: number
-) => {
-  const imageData = new ImageData(new Uint8ClampedArray(buffer), width, height);
-  drawImageDataFit(canvas, imageData, cssW, cssH);
-};
-
 const IncomingCell = ({ imageData }: { imageData: ImageData | null }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !imageData) return;
-    drawImageDataFit(canvas, imageData, INCOMING_CSS, INCOMING_CSS);
+    drawImageDataToCanvas(canvas, imageData, {
+      mode: "fit",
+      highQualityDownsample: true,
+    });
   }, [imageData]);
 
   if (!imageData) return null;
 
   return (
     <div
-      className="absolute left-0 top-0 z-10 flex flex-col gap-1 rounded-md border border-border bg-background/95 p-2 shadow-md"
+      className="absolute left-0 top-0 z-10 flex flex-col gap-0 opacity-100"
       style={{ width: INCOMING_CSS, height: INCOMING_CSS + 24 }}
     >
-      <Label className="shrink-0 text-xs font-medium text-muted-foreground">
+      <Label className="shrink-0 text-xs font-medium text-muted-foreground mb-0 absolute left-0 top-0 z-11">
         Incoming
       </Label>
-      <div className="min-h-0 flex-1 overflow-hidden rounded border border-border bg-black">
+      <div className="min-h-0 flex-1 overflow-hidden bg-black/50 backdrop-blur-sm relative">
         <canvas
           ref={canvasRef}
-          className="h-full w-full"
-          style={{ display: "block" }}
+          className="h-full w-full block"
           aria-label="Incoming image before dither"
         />
       </div>
@@ -100,12 +61,14 @@ const DitherChannelCell = ({
   buffer,
   width,
   height,
+  previewMode,
 }: {
   kind: ChannelKind;
   label: string;
   buffer: ArrayBuffer | null;
   width: number;
   height: number;
+  previewMode: CanvasPreviewMode;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -127,8 +90,14 @@ const DitherChannelCell = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !buffer || width <= 0 || height <= 0 || size.w <= 0 || size.h <= 0) return;
-    drawBufferFit(canvas, buffer, width, height, size.w, size.h);
-  }, [kind, buffer, width, height, size.w, size.h]);
+    drawRgbaBufferToCanvas(canvas, {
+      buffer,
+      width,
+      height,
+      mode: previewMode,
+      highQualityDownsample: true,
+    });
+  }, [kind, buffer, width, height, size.w, size.h, previewMode]);
 
   return (
     <div
@@ -152,6 +121,7 @@ const DitherChannelCell = ({
 
 export const DitherPreview = ({ processedImageData }: Props) => {
   const { ditherResult } = useProcessingWorkerContext();
+  const [previewMode, setPreviewMode] = useState<CanvasPreviewMode>("fit");
 
   const getBufferForKind = (
     kind: ChannelKind
@@ -175,6 +145,39 @@ export const DitherPreview = ({ processedImageData }: Props) => {
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
       <IncomingCell imageData={processedImageData} />
+      <div className="absolute right-2 top-2 z-10">
+        <div
+          className="flex w-fit flex-wrap gap-1 rounded-lg border border-border bg-background/85 p-1 backdrop-blur-sm"
+          role="tablist"
+          aria-label="Dither preview zoom mode"
+        >
+          {([
+            { id: "fit", label: "Fit" },
+            { id: "pixel-perfect", label: "1:1 px" },
+          ] as const).map(({ id, label }) => {
+            const selected = previewMode === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                tabIndex={selected ? 0 : -1}
+                aria-label={id === "fit" ? "Fit all channel previews to panel" : "Show one source pixel per screen pixel"}
+                onClick={() => setPreviewMode(id)}
+                className={cn(
+                  "rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div
         className="grid h-full w-full grid-cols-2 grid-rows-2 gap-1 p-1"
@@ -192,6 +195,7 @@ export const DitherPreview = ({ processedImageData }: Props) => {
               buffer={data?.buffer ?? null}
               width={data?.width ?? 0}
               height={data?.height ?? 0}
+              previewMode={previewMode}
             />
           );
         })}

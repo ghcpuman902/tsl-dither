@@ -30,8 +30,11 @@ const loadFromStorage = (): PipelineState => {
       typeof parsed.sourceImageSrc === "string" && parsed.sourceImageSrc.startsWith("blob:")
         ? DEFAULT_IMAGE_SRC
         : (parsed.sourceImageSrc ?? DEFAULT_STATE.sourceImageSrc);
-    const activeStage =
-      parsed.activeStage === "channel-preview" ? "dither" : (parsed.activeStage ?? DEFAULT_STATE.activeStage);
+    const rawActiveStage = (parsed as { activeStage?: string }).activeStage;
+    const activeStage: StageId =
+      rawActiveStage === "channel-preview"
+        ? "dither"
+        : (parsed.activeStage ?? DEFAULT_STATE.activeStage);
     return {
       ...DEFAULT_STATE,
       ...parsed,

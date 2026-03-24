@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { usePipeline } from "@/lib/pipeline-context";
 import { applyTone } from "@/lib/tone-processor";
 import { PipelineOutputFitCanvas } from "@/components/editor/PipelineOutputFitCanvas";
+import type { CanvasPreviewMode } from "@/lib/canvas-preview";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
 
 type ExportFormat = "png" | "jpeg" | "webp";
 
@@ -24,6 +26,7 @@ export const ExportStage = () => {
   const [format, setFormat] = useState<ExportFormat>("png");
   const [quality, setQuality] = useState(92);
   const [isExporting, setIsExporting] = useState(false);
+  const [previewMode, setPreviewMode] = useState<CanvasPreviewMode>("fit");
 
   const handleExport = () => {
     setIsExporting(true);
@@ -93,15 +96,52 @@ export const ExportStage = () => {
           Preview
         </Label>
         <div
+          className="flex w-fit flex-wrap gap-1 rounded-lg border border-border p-1"
+          role="tablist"
+          aria-label="Export preview zoom mode"
+        >
+          {([
+            { id: "fit", label: "Fit" },
+            { id: "pixel-perfect", label: "1:1 px" },
+          ] as const).map(({ id, label }) => {
+            const selected = previewMode === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                tabIndex={selected ? 0 : -1}
+                aria-label={id === "fit" ? "Fit preview to panel" : "Show one source pixel per screen pixel"}
+                onClick={() => setPreviewMode(id)}
+                className={cn(
+                  "rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div
           className="aspect-square w-full overflow-hidden rounded-md border border-border bg-black"
           aria-label="What will be exported"
         >
           <PipelineOutputFitCanvas
             pipelineOutput={pipelineOutput}
+            mode={previewMode}
             className="h-full w-full"
             aria-label="Export preview thumbnail"
           />
         </div>
+        <p className="text-xs text-muted-foreground">
+          {previewMode === "pixel-perfect"
+            ? "1:1 mode maps one source pixel to one physical display pixel (retina-aware)."
+            : "Fit mode uses high-quality downsampling to reduce moire in dense dither patterns."}
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">
