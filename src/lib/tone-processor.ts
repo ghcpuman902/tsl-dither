@@ -3,6 +3,23 @@ import type { ToneParams, ToneVisible } from "./types";
 const clamp = (v: number, min = 0, max = 255): number =>
   Math.max(min, Math.min(max, v));
 
+const srgbToLinear = (v: number): number => {
+  const c = clamp(v, 0, 255) / 255;
+  if (c <= 0.04045) return c / 12.92;
+  return Math.pow((c + 0.055) / 1.055, 2.4);
+};
+
+const linearToSrgb = (v: number): number => {
+  const c = Math.max(0, Math.min(1, v));
+  if (c <= 0.0031308) return c * 12.92 * 255;
+  return (1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255;
+};
+
+const toLutIndex = (v: number): number => {
+  const rounded = Math.round(v);
+  return Math.max(0, Math.min(255, rounded));
+};
+
 const rgbToHsl = (r: number, g: number, b: number): [number, number, number] => {
   const rn = r / 255, gn = g / 255, bn = b / 255;
   const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
@@ -138,9 +155,13 @@ export const applyTone = (
     }
 
     if (vis.exposure) {
-      r = clamp(r * expMult);
-      g = clamp(g * expMult);
-      b = clamp(b * expMult);
+      // Exposure in linear-light space avoids harsh posterization after downsize.
+      const rLin = srgbToLinear(r) * expMult;
+      const gLin = srgbToLinear(g) * expMult;
+      const bLin = srgbToLinear(b) * expMult;
+      r = clamp(linearToSrgb(rLin));
+      g = clamp(linearToSrgb(gLin));
+      b = clamp(linearToSrgb(bLin));
     }
 
     if (vis.contrast) {
@@ -150,9 +171,10 @@ export const applyTone = (
     }
 
     if (vis.highlights || vis.shadows || vis.whites || vis.blacks) {
-      r = toneLUT[r];
-      g = toneLUT[g];
-      b = toneLUT[b];
+      // Tone LUT requires integer indices; float indexing produces undefined bins.
+      r = toneLUT[toLutIndex(r)];
+      g = toneLUT[toLutIndex(g)];
+      b = toneLUT[toLutIndex(b)];
     }
 
     if (vis.saturation && satFactor !== 1) {

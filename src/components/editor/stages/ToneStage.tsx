@@ -1,18 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { usePipeline } from "@/lib/pipeline-context";
 import { Histogram } from "@/components/editor/Histogram";
 import { ToneSliders } from "@/components/editor/controls/ToneSliders";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import { RotateCcw } from "lucide-react";
 
-type Props = {
-  processedImageData: ImageData | null;
-};
-
-export const ToneStage = ({ processedImageData }: Props) => {
+export const ToneStage = () => {
   const { resetTone } = usePipeline();
+  const [showRawSpikes, setShowRawSpikes] = useState(false);
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -22,7 +22,19 @@ export const ToneStage = ({ processedImageData }: Props) => {
           Histogram
         </span>
         <div className="min-h-[84px] rounded-md bg-black/60 p-2">
-          <Histogram />
+          <Histogram smooth={!showRawSpikes} />
+        </div>
+        <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
+          <Label htmlFor="tone-histogram-raw-toggle" className="text-xs text-muted-foreground">
+            Show raw spikes
+          </Label>
+          <Switch
+            id="tone-histogram-raw-toggle"
+            size="sm"
+            checked={showRawSpikes}
+            onCheckedChange={setShowRawSpikes}
+            aria-label="Toggle raw histogram spikes"
+          />
         </div>
       </div>
 

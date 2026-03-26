@@ -1,4 +1,4 @@
-import type { DitherParams, ToneParams, ToneVisible } from "./types";
+import type { DitherParams, DownsizeParams, ToneParams, ToneVisible } from "./types";
 
 /** Requests sent from main thread to the processing worker. */
 export type WorkerRequest =
@@ -10,6 +10,14 @@ export type WorkerRequest =
       height: number;
     }
   | { type: "dither"; id: number; params: DitherParams }
+  | {
+      type: "downsize";
+      id: number;
+      buffer: ArrayBuffer;
+      width: number;
+      height: number;
+      params: DownsizeParams;
+    }
   | {
       type: "histogram";
       id: number;
@@ -36,6 +44,13 @@ export type WorkerResponse =
       rBuffer: ArrayBuffer;
       gBuffer: ArrayBuffer;
       bBuffer: ArrayBuffer;
+      width: number;
+      height: number;
+    }
+  | {
+      type: "downsize-result";
+      id: number;
+      buffer: ArrayBuffer;
       width: number;
       height: number;
     }

@@ -1,4 +1,22 @@
-export type StageId = "load" | "tone" | "dither" | "export";
+export type StageId = "load" | "downsize" | "tone" | "dither" | "export";
+
+export type DownsizeMode = "ratio" | "target-width";
+export type DownsizeAlgorithm = "nearest" | "bilinear" | "bicubic" | "lanczos";
+export type DownsizeRatioDivisor = 1 | 2 | 4 | 8 | 16 | 32;
+
+export type DownsizeParams = {
+  mode: DownsizeMode;
+  ratioDivisor: DownsizeRatioDivisor;
+  targetWidthPx: number;
+  algorithm: DownsizeAlgorithm;
+};
+
+export const DEFAULT_DOWNSIZE_PARAMS: DownsizeParams = {
+  mode: "ratio",
+  ratioDivisor: 1,
+  targetWidthPx: 1024,
+  algorithm: "lanczos",
+};
 
 export type ToneParams = {
   exposure: number;    // -5 to +5 (stops)
@@ -64,6 +82,7 @@ export const DEFAULT_DITHER_PARAMS: DitherParams = {
 export type PipelineState = {
   sourceImageSrc: string;
   activeStage: StageId;
+  downsize: DownsizeParams;
   tone: ToneParams;
   toneVisible: ToneVisible;
   dither: DitherParams;
@@ -84,6 +103,7 @@ export type PipelineContextType = {
   setSourceImageFromFile: (file: File) => Promise<void>;
   setActiveStage: (stage: StageId) => void;
   setPipelineOutput: (output: PipelineOutput | null) => void;
+  updateDownsize: (params: Partial<DownsizeParams>) => void;
   updateTone: (params: Partial<ToneParams>) => void;
   updateToneVisible: (key: keyof ToneParams, visible: boolean) => void;
   resetTone: () => void;
@@ -97,6 +117,7 @@ export type Stage = {
 
 export const PIPELINE_STAGES: Stage[] = [
   { id: "load", label: "Load" },
+  { id: "downsize", label: "Downsize" },
   { id: "tone", label: "Tone" },
   { id: "dither", label: "Dither" },
   { id: "export", label: "Export" },

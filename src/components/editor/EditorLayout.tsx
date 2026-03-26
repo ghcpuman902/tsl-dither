@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePipeline } from "@/lib/pipeline-context";
 import { useProcessingWorkerContext } from "@/lib/processing-worker-context";
 import type { DitherParams } from "@/lib/types";
@@ -8,6 +8,7 @@ import { PipelineNav } from "./PipelineNav";
 import { PreviewCanvas } from "./PreviewCanvas";
 import { DitherPreview } from "./DitherPreview";
 import { LoadStage } from "./stages/LoadStage";
+import { DownsizeStage } from "./stages/DownsizeStage";
 import { ToneStage } from "./stages/ToneStage";
 import { DitherStage } from "./stages/DitherStage";
 import { ExportStage } from "./stages/ExportStage";
@@ -20,14 +21,21 @@ const isValidHistogramSource = (img: ImageData): boolean =>
   img.height > 0 &&
   img.data.length === img.width * img.height * 4;
 
-const StagePanel = ({ processedImageData }: { processedImageData: ImageData | null }) => {
+const StagePanel = ({ sourceImageData }: { sourceImageData: ImageData | null }) => {
   const { state } = usePipeline();
 
   switch (state.activeStage) {
     case "load":
       return <LoadStage />;
+    case "downsize":
+      return (
+        <DownsizeStage
+          sourceWidth={sourceImageData?.width ?? 0}
+          sourceHeight={sourceImageData?.height ?? 0}
+        />
+      );
     case "tone":
-      return <ToneStage processedImageData={processedImageData} />;
+      return <ToneStage />;
     case "dither":
       return <DitherStage />;
     case "export":
@@ -38,12 +46,46 @@ const StagePanel = ({ processedImageData }: { processedImageData: ImageData | nu
 export const EditorLayout = () => {
   const { state, setPipelineOutput, pipelineOutput } = usePipeline();
   const {
-    setSource,
+    requestDownsize,
+    downsizeResult,
+    requestTone,
+    toneResult,
     requestHistogram,
     requestDither,
     ditherResult,
+    setSource,
   } = useProcessingWorkerContext();
-  const [processedImageData, setProcessedImageData] = useState<ImageData | null>(null);
+  const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
+  const downsizedImageData = useMemo(() => {
+    if (!downsizeResult) return null;
+    return new ImageData(
+      new Uint8ClampedArray(downsizeResult.buffer.slice(0)),
+      downsizeResult.width,
+      downsizeResult.height
+    );
+  }, [downsizeResult]);
+
+  const processedImageData = useMemo(() => {
+    if (!toneResult) return null;
+    return new ImageData(
+      new Uint8ClampedArray(toneResult.buffer.slice(0)),
+      toneResult.width,
+      toneResult.height
+    );
+  }, [toneResult]);
+  const downsizePreviewOutput = useMemo(() => {
+    if (!downsizedImageData) return null;
+    const { data, width, height } = downsizedImageData;
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    return { buffer, width, height };
+  }, [downsizedImageData]);
+  const tonePreviewOutput = useMemo(() => {
+    if (!processedImageData) return null;
+    const { data, width, height } = processedImageData;
+    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    return { buffer, width, height };
+  }, [processedImageData]);
+
   const ditherInFlightRef = useRef(false);
   const pendingDitherRef = useRef<DitherParams | null>(null);
   const visitedDitherStageRef = useRef(false);
@@ -55,8 +97,18 @@ export const EditorLayout = () => {
   const prevSourceSrcRef = useRef<string | null>(null);
 
   const handleProcessed = useCallback((imageData: ImageData) => {
-    setProcessedImageData(imageData);
+    setSourceImageData(imageData);
   }, []);
+
+  useEffect(() => {
+    if (!sourceImageData) return;
+    requestDownsize(sourceImageData, state.downsize);
+  }, [sourceImageData, state.downsize, requestDownsize]);
+
+  useEffect(() => {
+    if (!downsizedImageData) return;
+    requestTone(downsizedImageData, state.tone, state.toneVisible);
+  }, [downsizedImageData, state.tone, state.toneVisible, requestTone]);
 
   useEffect(() => {
     if (!processedImageData) return;
@@ -172,22 +224,30 @@ export const EditorLayout = () => {
           <div
             className="h-full w-full"
             style={{
-              visibility:
-                state.activeStage === "dither" || state.activeStage === "export"
-                  ? "hidden"
-                  : "visible",
-              position:
-                state.activeStage === "dither" || state.activeStage === "export"
-                  ? "absolute"
-                  : "relative",
+              visibility: state.activeStage === "load" ? "visible" : "hidden",
+              position: state.activeStage === "load" ? "relative" : "absolute",
               inset: 0,
             }}
-            aria-hidden={
-              state.activeStage === "dither" || state.activeStage === "export"
-            }
+            aria-hidden={state.activeStage !== "load"}
           >
             <PreviewCanvas onProcessed={handleProcessed} />
           </div>
+          {state.activeStage === "downsize" && (
+            <div className="absolute inset-0">
+              <PipelineOutputFitCanvas
+                pipelineOutput={downsizePreviewOutput}
+                aria-label="Downsize preview: resized pipeline frame"
+              />
+            </div>
+          )}
+          {state.activeStage === "tone" && (
+            <div className="absolute inset-0">
+              <PipelineOutputFitCanvas
+                pipelineOutput={tonePreviewOutput}
+                aria-label="Tone preview: downsized and tone-adjusted frame"
+              />
+            </div>
+          )}
           {state.activeStage === "dither" && (
             <div className="absolute inset-0">
               <DitherPreview processedImageData={processedImageData} />
@@ -209,7 +269,7 @@ export const EditorLayout = () => {
           style={{ width: PANEL_WIDTH }}
           aria-label="Stage controls"
         >
-          <StagePanel processedImageData={processedImageData} />
+          <StagePanel sourceImageData={sourceImageData} />
         </aside>
       </div>
     </div>

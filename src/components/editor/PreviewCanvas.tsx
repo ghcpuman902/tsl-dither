@@ -2,25 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePipeline } from "@/lib/pipeline-context";
-import { applyTone } from "@/lib/tone-processor";
-import { renderToneGPU, disposeGPU } from "@/lib/tone-renderer-webgl";
-import { DEFAULT_TONE_PARAMS, DEFAULT_TONE_VISIBLE } from "@/lib/types";
 
 type Props = {
   onProcessed?: (imageData: ImageData) => void;
 };
-
-const LOAD_TONE_VISIBLE = {
-  ...DEFAULT_TONE_VISIBLE,
-  exposure: false,
-  contrast: false,
-  highlights: false,
-  shadows: false,
-  whites: false,
-  blacks: false,
-  saturation: false,
-  temperature: false,
-} as const;
 
 const HISTOGRAM_DEBOUNCE_MS = 200;
 
@@ -33,9 +18,9 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
   const { state } = usePipeline();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loadedImg, setLoadedImg] = useState<HTMLImageElement | null>(null);
+  const [pixelatedPreview, setPixelatedPreview] = useState(false);
   const rafRef = useRef(0);
   const histogramTimerRef = useRef(0);
-  const readbackBufferRef = useRef<Uint8ClampedArray | null>(null);
   const lastProcessedRef = useRef<ImageData | null>(null);
 
   useEffect(() => {
@@ -45,12 +30,6 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
     img.onerror = () => console.error("Failed to load image:", state.sourceImageSrc);
     img.src = state.sourceImageSrc;
   }, [state.sourceImageSrc]);
-
-  useEffect(() => {
-    return () => {
-      disposeGPU();
-    };
-  }, []);
 
   const render = useCallback(() => {
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
@@ -77,77 +56,41 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
       drawY = 0;
     }
 
-    const w = Math.max(1, Math.round(drawW));
-    const h = Math.max(1, Math.round(drawH));
-    const isLoad = state.activeStage === "load";
+    const sourceW = Math.max(1, loadedImg.naturalWidth);
+    const sourceH = Math.max(1, loadedImg.naturalHeight);
+    const shouldPixelate = drawW > sourceW || drawH > sourceH;
+    setPixelatedPreview((prev) => (prev === shouldPixelate ? prev : shouldPixelate));
 
-    const gpuOk = renderToneGPU({
-      canvas,
-      image: loadedImg,
-      tone: isLoad ? DEFAULT_TONE_PARAMS : state.tone,
-      toneVisible: isLoad ? LOAD_TONE_VISIBLE : state.toneVisible,
-      viewport: { x: drawX, y: ch - drawY - h, w: drawW, h: drawH },
-    });
-
-    if (gpuOk) {
-      if (onProcessed) {
-        const gl = canvas.getContext("webgl", { alpha: false, premultipliedAlpha: false });
-        if (gl) {
-          const totalBytes = w * h * 4;
-          const readY = Math.round(ch - drawY - h);
-          if (totalBytes > 0 && readY >= 0 && readY + h <= ch) {
-            if (!readbackBufferRef.current || readbackBufferRef.current.length !== totalBytes) {
-              readbackBufferRef.current = new Uint8ClampedArray(totalBytes);
-            }
-            gl.readPixels(drawX, readY, w, h, gl.RGBA, gl.UNSIGNED_BYTE, readbackBufferRef.current);
-            const flipped = new Uint8ClampedArray(totalBytes);
-            const rowBytes = w * 4;
-            for (let row = 0; row < h; row++) {
-              const srcRow = h - 1 - row;
-              flipped.set(
-                readbackBufferRef.current.subarray(srcRow * rowBytes, (srcRow + 1) * rowBytes),
-                row * rowBytes
-              );
-            }
-            lastProcessedRef.current = new ImageData(flipped, w, h);
-          }
-        }
-        window.clearTimeout(histogramTimerRef.current);
-        histogramTimerRef.current = window.setTimeout(() => {
-          const frame = lastProcessedRef.current;
-          if (frame && isValidProcessedFrame(frame)) {
-            onProcessed(new ImageData(new Uint8ClampedArray(frame.data), frame.width, frame.height));
-          }
-        }, HISTOGRAM_DEBOUNCE_MS);
-      }
-      return;
-    }
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
+    // Keep a stable processing frame for the whole pipeline.
+    // When preview is larger than source, process at source resolution.
+    const processScale = shouldPixelate
+      ? 1
+      : Math.min(drawW / sourceW, drawH / sourceH);
+    const w = Math.max(1, Math.round(sourceW * processScale));
+    const h = Math.max(1, Math.round(sourceH * processScale));
     const offscreen = document.createElement("canvas");
     offscreen.width = w;
     offscreen.height = h;
     const offCtx = offscreen.getContext("2d");
     if (!offCtx) return;
-    offCtx.drawImage(loadedImg, 0, 0, w, h);
+    offCtx.imageSmoothingEnabled = !shouldPixelate;
+    offCtx.imageSmoothingQuality = "high";
+    offCtx.drawImage(loadedImg, 0, 0, sourceW, sourceH, 0, 0, w, h);
 
-    let imageData = offCtx.getImageData(0, 0, w, h);
-    if (!isLoad) {
-      imageData = applyTone(imageData, state.tone, state.toneVisible);
-    }
+    const baseImageData = offCtx.getImageData(0, 0, w, h);
 
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, cw, ch);
-    offCtx.putImageData(imageData, 0, 0);
-    ctx.drawImage(offscreen, drawX, drawY);
+    ctx.imageSmoothingEnabled = !shouldPixelate;
+    ctx.drawImage(offscreen, drawX, drawY, drawW, drawH);
 
     if (onProcessed) {
       lastProcessedRef.current = new ImageData(
-        new Uint8ClampedArray(imageData.data),
-        imageData.width,
-        imageData.height
+        new Uint8ClampedArray(baseImageData.data),
+        baseImageData.width,
+        baseImageData.height
       );
       window.clearTimeout(histogramTimerRef.current);
       histogramTimerRef.current = window.setTimeout(() => {
@@ -157,7 +100,7 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
         }
       }, HISTOGRAM_DEBOUNCE_MS);
     }
-  }, [loadedImg, state.activeStage, state.tone, state.toneVisible, onProcessed]);
+  }, [loadedImg, onProcessed, state.sourceImageSrc]);
 
   useEffect(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -194,7 +137,7 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
       ref={canvasRef}
       className="w-full h-full block"
       aria-label="Image preview"
-      style={{ imageRendering: "auto" }}
+      style={{ imageRendering: pixelatedPreview ? "pixelated" : "auto" }}
     />
   );
 };

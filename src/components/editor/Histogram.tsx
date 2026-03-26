@@ -24,7 +24,26 @@ const isValidHistogram = (r: number[], g: number[], b: number[]): boolean => {
   return true;
 };
 
-export const Histogram = () => {
+type Props = {
+  smooth?: boolean;
+};
+
+const smoothBins = (bins: number[]): number[] => {
+  if (bins.length !== 256) return bins;
+  const out = new Array<number>(256).fill(0);
+  for (let i = 0; i < 256; i++) {
+    const a = bins[Math.max(0, i - 2)];
+    const b = bins[Math.max(0, i - 1)];
+    const c = bins[i];
+    const d = bins[Math.min(255, i + 1)];
+    const e = bins[Math.min(255, i + 2)];
+    // 5-tap gaussian-like smoothing: [1,4,6,4,1] / 16
+    out[i] = (a + 4 * b + 6 * c + 4 * d + e) / 16;
+  }
+  return out;
+};
+
+export const Histogram = ({ smooth = true }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastValidRef = useRef<{ r: number[]; g: number[]; b: number[] } | null>(null);
   const { histogramResult } = useProcessingWorkerContext();
@@ -58,8 +77,10 @@ export const Histogram = () => {
       };
     }
 
-    const { r, g, b } = dataToDraw;
-    const rawMax = Math.max(...r, ...g, ...b, 1);
+    const sourceR = smooth ? smoothBins(dataToDraw.r) : dataToDraw.r;
+    const sourceG = smooth ? smoothBins(dataToDraw.g) : dataToDraw.g;
+    const sourceB = smooth ? smoothBins(dataToDraw.b) : dataToDraw.b;
+    const rawMax = Math.max(...sourceR, ...sourceG, ...sourceB, 1);
     if (!Number.isFinite(rawMax) || rawMax <= 0) return;
 
     // Log scale: log(count + 1) / log(rawMax + 1) keeps small peaks visible
@@ -84,10 +105,10 @@ export const Histogram = () => {
       ctx.fill();
     };
 
-    drawChannel(b, "rgba(100, 140, 255, 0.45)");
-    drawChannel(g, "rgba(80, 220, 100, 0.45)");
-    drawChannel(r, "rgba(255, 90, 90, 0.45)");
-  }, [histogramResult]);
+    drawChannel(sourceB, "rgba(100, 140, 255, 0.45)");
+    drawChannel(sourceG, "rgba(80, 220, 100, 0.45)");
+    drawChannel(sourceR, "rgba(255, 90, 90, 0.45)");
+  }, [histogramResult, smooth]);
 
   return (
     <canvas

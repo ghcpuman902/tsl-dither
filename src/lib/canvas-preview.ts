@@ -113,8 +113,8 @@ export const drawImageDataToCanvas = (
     return;
   }
 
-  ctx.imageSmoothingEnabled = options.mode === "fit" && (drawW > srcW || drawH > srcH);
-  if (ctx.imageSmoothingEnabled) ctx.imageSmoothingQuality = "high";
+  // Keep upscaled previews pixelated so stage outputs match processing pixels.
+  ctx.imageSmoothingEnabled = false;
   ctx.drawImage(srcCanvas, 0, 0, srcW, srcH, x, y, drawW, drawH);
 };
 

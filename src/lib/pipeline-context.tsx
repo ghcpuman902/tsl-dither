@@ -1,8 +1,21 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { PipelineContextType, PipelineState, PipelineOutput, ToneParams, DitherParams, StageId } from "./types";
-import { DEFAULT_TONE_PARAMS, DEFAULT_TONE_VISIBLE, DEFAULT_DITHER_PARAMS } from "./types";
+import type {
+  PipelineContextType,
+  PipelineState,
+  PipelineOutput,
+  ToneParams,
+  DitherParams,
+  DownsizeParams,
+  StageId,
+} from "./types";
+import {
+  DEFAULT_DOWNSIZE_PARAMS,
+  DEFAULT_TONE_PARAMS,
+  DEFAULT_TONE_VISIBLE,
+  DEFAULT_DITHER_PARAMS,
+} from "./types";
 import {
   saveSourceImage,
   getSourceImage,
@@ -16,6 +29,7 @@ const DEFAULT_IMAGE_SRC = "/DSC04192_LowRes.jpg";
 const DEFAULT_STATE: PipelineState = {
   sourceImageSrc: DEFAULT_IMAGE_SRC,
   activeStage: "load",
+  downsize: DEFAULT_DOWNSIZE_PARAMS,
   tone: DEFAULT_TONE_PARAMS,
   toneVisible: DEFAULT_TONE_VISIBLE,
   dither: DEFAULT_DITHER_PARAMS,
@@ -40,6 +54,7 @@ const loadFromStorage = (): PipelineState => {
       ...parsed,
       sourceImageSrc,
       activeStage,
+      downsize: { ...DEFAULT_DOWNSIZE_PARAMS, ...(parsed.downsize ?? {}) },
       tone: { ...DEFAULT_TONE_PARAMS, ...(parsed.tone ?? {}) },
       toneVisible: { ...DEFAULT_TONE_VISIBLE, ...(parsed.toneVisible ?? {}) },
       dither: { ...DEFAULT_DITHER_PARAMS, ...(parsed.dither ?? {}) },
@@ -52,9 +67,10 @@ const loadFromStorage = (): PipelineState => {
 const PipelineContext = createContext<PipelineContextType | null>(null);
 
 export const PipelineProvider = ({ children }: { children: React.ReactNode }) => {
-  // Always start with DEFAULT_STATE so server and client first paint match (avoids hydration mismatch).
-  // Rehydrate from localStorage in useEffect so it only runs on the client after mount.
-  const [state, setState] = useState<PipelineState>(DEFAULT_STATE);
+  const [state, setState] = useState<PipelineState>(() => {
+    if (typeof window === "undefined") return DEFAULT_STATE;
+    return loadFromStorage();
+  });
   const [pipelineOutput, setPipelineOutputState] = useState<PipelineOutput | null>(null);
 
   const setPipelineOutput = useCallback((output: PipelineOutput | null) => {
@@ -62,7 +78,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   useEffect(() => {
-    setState(loadFromStorage());
     let cancelled = false;
     (async () => {
       try {
@@ -130,6 +145,12 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     [],
   );
 
+  const updateDownsize = useCallback(
+    (params: Partial<DownsizeParams>) =>
+      setState((prev) => ({ ...prev, downsize: { ...prev.downsize, ...params } })),
+    [],
+  );
+
   const updateTone = useCallback(
     (params: Partial<ToneParams>) =>
       setState((prev) => ({ ...prev, tone: { ...prev.tone, ...params } })),
@@ -169,6 +190,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
       setSourceImageFromFile,
       setActiveStage,
       setPipelineOutput,
+      updateDownsize,
       updateTone,
       updateToneVisible,
       resetTone,
@@ -181,6 +203,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
       setSourceImageFromFile,
       setActiveStage,
       setPipelineOutput,
+      updateDownsize,
       updateTone,
       updateToneVisible,
       resetTone,

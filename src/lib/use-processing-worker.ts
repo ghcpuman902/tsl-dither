@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DitherParams, ToneParams, ToneVisible } from "./types";
+import type { DitherParams, DownsizeParams, ToneParams, ToneVisible } from "./types";
 import type { DitherResult, HistogramData, WorkerRequest, WorkerResponse } from "./worker-types";
 
 const DEBUG = process.env.NODE_ENV === "development";
 
 export type ProcessingWorkerState = {
+  downsizeResult: { buffer: ArrayBuffer; width: number; height: number } | null;
   ditherResult: DitherResult | null;
   histogramResult: HistogramData | null;
   toneResult: { buffer: ArrayBuffer; width: number; height: number } | null;
@@ -14,6 +15,7 @@ export type ProcessingWorkerState = {
 
 export type ProcessingWorkerActions = {
   setSource: (imageData: ImageData) => void;
+  requestDownsize: (imageData: ImageData, params: DownsizeParams) => void;
   requestDither: (params: DitherParams) => void;
   requestHistogram: (imageData: ImageData) => void;
   requestTone: (
@@ -27,13 +29,20 @@ export type UseProcessingWorkerReturn = ProcessingWorkerState & ProcessingWorker
 
 export const useProcessingWorker = (): UseProcessingWorkerReturn => {
   const workerRef = useRef<Worker | null>(null);
+  const downsizeIdRef = useRef(0);
   const ditherIdRef = useRef(0);
   const histogramIdRef = useRef(0);
   const toneIdRef = useRef(0);
+  const pendingDownsizeTimeRef = useRef(0);
   const pendingDitherTimeRef = useRef(0);
   const pendingHistogramTimeRef = useRef(0);
   const pendingToneTimeRef = useRef(0);
 
+  const [downsizeResult, setDownsizeResult] = useState<{
+    buffer: ArrayBuffer;
+    width: number;
+    height: number;
+  } | null>(null);
   const [ditherResult, setDitherResult] = useState<DitherResult | null>(null);
   const [histogramResult, setHistogramResult] = useState<HistogramData | null>(null);
   const [toneResult, setToneResult] = useState<{
@@ -52,6 +61,20 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
       const msg = e.data;
 
       switch (msg.type) {
+        case "downsize-result": {
+          if (msg.id !== downsizeIdRef.current) return;
+          if (DEBUG && pendingDownsizeTimeRef.current) {
+            const ms = (performance.now() - pendingDownsizeTimeRef.current).toFixed(0);
+            console.log(`[Worker] downsize result #${msg.id} received (${ms}ms)`);
+            pendingDownsizeTimeRef.current = 0;
+          }
+          setDownsizeResult({
+            buffer: msg.buffer,
+            width: msg.width,
+            height: msg.height,
+          });
+          break;
+        }
         case "dither-result": {
           if (msg.id !== ditherIdRef.current) return;
           if (DEBUG && pendingDitherTimeRef.current) {
@@ -107,7 +130,12 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
   }, []);
 
   const setSource = useCallback((imageData: ImageData) => {
-    const id = Math.max(ditherIdRef.current, histogramIdRef.current, toneIdRef.current) + 1;
+    const id = Math.max(
+      downsizeIdRef.current,
+      ditherIdRef.current,
+      histogramIdRef.current,
+      toneIdRef.current
+    ) + 1;
     const buffer = imageData.data.buffer.slice(
       imageData.data.byteOffset,
       imageData.data.byteOffset + imageData.data.byteLength
@@ -121,6 +149,27 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
     };
     workerRef.current?.postMessage(req);
     if (DEBUG) console.log("[Worker] set-source sent");
+  }, []);
+
+  const requestDownsize = useCallback((imageData: ImageData, params: DownsizeParams) => {
+    const id = ++downsizeIdRef.current;
+    const buffer = imageData.data.buffer.slice(
+      imageData.data.byteOffset,
+      imageData.data.byteOffset + imageData.data.byteLength
+    );
+    if (DEBUG) {
+      pendingDownsizeTimeRef.current = performance.now();
+      console.log(`[Worker] downsize request #${id} sent`);
+    }
+    const req: WorkerRequest = {
+      type: "downsize",
+      id,
+      buffer,
+      width: imageData.width,
+      height: imageData.height,
+      params,
+    };
+    workerRef.current?.postMessage(req);
   }, []);
 
   const requestDither = useCallback((params: DitherParams) => {
@@ -179,10 +228,12 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
   );
 
   return {
+    downsizeResult,
     ditherResult,
     histogramResult,
     toneResult,
     setSource,
+    requestDownsize,
     requestDither,
     requestHistogram,
     requestTone,

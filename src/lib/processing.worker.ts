@@ -4,6 +4,7 @@
  */
 import { applyDither } from "./dither-processor";
 import { applyTone, computeHistogram } from "./tone-processor";
+import type { DownsizeParams } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker-types";
 
 let cachedSource: Uint8ClampedArray | null = null;
@@ -44,6 +45,60 @@ const channelToGrayscaleRgba = (
     out[o + 3] = rgbData[i * 4 + 3];
   }
   return out.buffer;
+};
+
+const clampDimension = (value: number, max: number): number => {
+  const bounded = Math.max(1, Math.min(max, Math.round(value)));
+  return Number.isFinite(bounded) ? bounded : 1;
+};
+
+const getDownsizeDimensions = (
+  srcWidth: number,
+  srcHeight: number,
+  params: DownsizeParams
+): { width: number; height: number } => {
+  if (params.mode === "target-width") {
+    const width = clampDimension(params.targetWidthPx, srcWidth);
+    const ratio = srcHeight / srcWidth;
+    const height = clampDimension(width * ratio, srcHeight);
+    return { width, height };
+  }
+
+  const divisor = params.ratioDivisor;
+  const width = clampDimension(srcWidth / divisor, srcWidth);
+  const height = clampDimension(srcHeight / divisor, srcHeight);
+  return { width, height };
+};
+
+const downsizeWithAlgorithm = (
+  source: ImageData,
+  params: DownsizeParams
+): ImageData => {
+  const { width, height } = getDownsizeDimensions(source.width, source.height, params);
+  if (width === source.width && height === source.height) {
+    return new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+  }
+
+  const srcCanvas = new OffscreenCanvas(source.width, source.height);
+  const srcCtx = srcCanvas.getContext("2d", { alpha: false });
+  if (!srcCtx) return new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+  srcCtx.putImageData(source, 0, 0);
+
+  const outCanvas = new OffscreenCanvas(width, height);
+  const outCtx = outCanvas.getContext("2d", { alpha: false });
+  if (!outCtx) return new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+
+  const qualityByAlgorithm: Record<DownsizeParams["algorithm"], ImageSmoothingQuality> = {
+    nearest: "low",
+    bilinear: "low",
+    bicubic: "medium",
+    lanczos: "high",
+  };
+
+  outCtx.imageSmoothingEnabled = params.algorithm !== "nearest";
+  outCtx.imageSmoothingQuality = qualityByAlgorithm[params.algorithm];
+  outCtx.drawImage(srcCanvas, 0, 0, source.width, source.height, 0, 0, width, height);
+  return outCtx.getImageData(0, 0, width, height);
 };
 
 workerScope.onmessage = (e: MessageEvent<WorkerRequest>): void => {
@@ -90,6 +145,34 @@ workerScope.onmessage = (e: MessageEvent<WorkerRequest>): void => {
       break;
     }
 
+    case "downsize": {
+      const { width, height } = msg;
+      if (width <= 0 || height <= 0 || msg.buffer.byteLength !== width * height * 4) {
+        break;
+      }
+      const imageData = new ImageData(
+        new Uint8ClampedArray(msg.buffer) as Uint8ClampedArray<ArrayBuffer>,
+        width,
+        height
+      );
+      const resized = downsizeWithAlgorithm(imageData, msg.params);
+      const buffer = resized.data.buffer.slice(
+        resized.data.byteOffset,
+        resized.data.byteOffset + resized.data.byteLength
+      );
+      postResponse(
+        {
+          type: "downsize-result",
+          id: msg.id,
+          buffer,
+          width: resized.width,
+          height: resized.height,
+        },
+        [buffer]
+      );
+      break;
+    }
+
     case "histogram": {
       const { width, height } = msg;
       if (width <= 0 || height <= 0 || msg.buffer.byteLength !== width * height * 4) {
@@ -118,7 +201,10 @@ workerScope.onmessage = (e: MessageEvent<WorkerRequest>): void => {
         msg.height
       );
       const result = applyTone(imageData, msg.params, msg.visible);
-      const buffer = result.data.buffer.slice(0);
+      const buffer = result.data.buffer.slice(
+        result.data.byteOffset,
+        result.data.byteOffset + result.data.byteLength
+      );
       postResponse(
         {
           type: "tone-result",
