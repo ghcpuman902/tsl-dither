@@ -57,13 +57,7 @@ export const DEFAULT_TONE_VISIBLE: ToneVisible = {
 export type DitherMethod =
   | "threshold"
   | "white-noise"
-  | "bayer"
-  | "atkinson"
-  | "burkes"
-  | "floyd-steinberg"
-  | "jjn"
-  | "sierra"
-  | "stucki";
+  | "bayer";
 
 export type DitherParams = {
   method: DitherMethod;

@@ -1,19 +1,14 @@
 import type { ToneParams, ToneVisible } from "./types";
+import {
+  SRGB_TO_LINEAR_LUT,
+  clampByte,
+  linear01ToSrgbByte,
+  linearLuminance,
+  srgbByteToLinear01,
+} from "./color-space";
 
 const clamp = (v: number, min = 0, max = 255): number =>
   Math.max(min, Math.min(max, v));
-
-const srgbToLinear = (v: number): number => {
-  const c = clamp(v, 0, 255) / 255;
-  if (c <= 0.04045) return c / 12.92;
-  return Math.pow((c + 0.055) / 1.055, 2.4);
-};
-
-const linearToSrgb = (v: number): number => {
-  const c = Math.max(0, Math.min(1, v));
-  if (c <= 0.0031308) return c * 12.92 * 255;
-  return (1.055 * Math.pow(c, 1 / 2.4) - 0.055) * 255;
-};
 
 const toLutIndex = (v: number): number => {
   const rounded = Math.round(v);
@@ -77,33 +72,33 @@ export const buildToneLUT = (params: ToneParams): Uint8Array => {
   const bFactor  = params.blacks / 100;
 
   for (let i = 0; i < 256; i++) {
-    let v = i;
+    let v = srgbByteToLinear01(i);
 
-    // Highlights: affects upper half (128–255)
-    if (hlFactor !== 0 && v > 128) {
-      const blend = (v - 128) / 127;
-      v = clamp(v + hlFactor * blend * 80);
+    // Highlights: affects upper range in linear light.
+    if (hlFactor !== 0 && v > 0.5) {
+      const blend = (v - 0.5) / 0.5;
+      v = Math.max(0, Math.min(1, v + hlFactor * blend * 0.35));
     }
 
-    // Shadows: affects lower half (0–128)
-    if (shFactor !== 0 && v < 128) {
-      const blend = (128 - v) / 128;
-      v = clamp(v + shFactor * blend * 80);
+    // Shadows: affects lower half in linear light.
+    if (shFactor !== 0 && v < 0.5) {
+      const blend = (0.5 - v) / 0.5;
+      v = Math.max(0, Math.min(1, v + shFactor * blend * 0.35));
     }
 
-    // Whites: affects near-white (200–255)
-    if (wFactor !== 0 && v > 200) {
-      const blend = (v - 200) / 55;
-      v = clamp(v + wFactor * blend * 55);
+    // Whites: affects near-white in linear light.
+    if (wFactor !== 0 && v > 0.8) {
+      const blend = (v - 0.8) / 0.2;
+      v = Math.max(0, Math.min(1, v + wFactor * blend * 0.2));
     }
 
-    // Blacks: affects near-black (0–60)
-    if (bFactor !== 0 && v < 60) {
-      const blend = (60 - v) / 60;
-      v = clamp(v + bFactor * blend * 60);
+    // Blacks: affects near-black in linear light.
+    if (bFactor !== 0 && v < 0.25) {
+      const blend = (0.25 - v) / 0.25;
+      v = Math.max(0, Math.min(1, v + bFactor * blend * 0.2));
     }
 
-    lut[i] = Math.round(v);
+    lut[i] = linear01ToSrgbByte(v);
   }
 
   return lut;
@@ -129,7 +124,8 @@ const defaultVisible: ToneVisible = {
 export const applyTone = (
   imageData: ImageData,
   params: ToneParams,
-  toneVisible?: Partial<ToneVisible>
+  toneVisible?: Partial<ToneVisible>,
+  outputDither = false
 ): ImageData => {
   const src = imageData.data;
   const len = src.length;
@@ -140,38 +136,40 @@ export const applyTone = (
   const exposureRounded = Math.round(params.exposure * 100) / 100;
   const expMult = Math.pow(2, exposureRounded);
   const contrastFactor = (100 + params.contrast) / 100;
-  const tempShift = params.temperature * 0.3;
+  const tempShift = params.temperature / 100;
   const satFactor = (100 + params.saturation) / 100;
   const toneLUT = buildToneLUT(params);
 
   for (let i = 0; i < len; i += 4) {
-    let r = src[i];
-    let g = src[i + 1];
-    let b = src[i + 2];
+    let rLin = SRGB_TO_LINEAR_LUT[src[i]];
+    let gLin = SRGB_TO_LINEAR_LUT[src[i + 1]];
+    let bLin = SRGB_TO_LINEAR_LUT[src[i + 2]];
 
     if (vis.temperature) {
-      r = clamp(r + tempShift);
-      b = clamp(b - tempShift);
+      const redGain = 1 + tempShift * 0.12;
+      const blueGain = 1 - tempShift * 0.12;
+      rLin = Math.max(0, Math.min(1, rLin * redGain));
+      bLin = Math.max(0, Math.min(1, bLin * blueGain));
     }
 
     if (vis.exposure) {
-      // Exposure in linear-light space avoids harsh posterization after downsize.
-      const rLin = srgbToLinear(r) * expMult;
-      const gLin = srgbToLinear(g) * expMult;
-      const bLin = srgbToLinear(b) * expMult;
-      r = clamp(linearToSrgb(rLin));
-      g = clamp(linearToSrgb(gLin));
-      b = clamp(linearToSrgb(bLin));
+      rLin = Math.max(0, Math.min(1, rLin * expMult));
+      gLin = Math.max(0, Math.min(1, gLin * expMult));
+      bLin = Math.max(0, Math.min(1, bLin * expMult));
     }
 
     if (vis.contrast) {
-      r = clamp((r - 128) * contrastFactor + 128);
-      g = clamp((g - 128) * contrastFactor + 128);
-      b = clamp((b - 128) * contrastFactor + 128);
+      const pivot = 0.18;
+      rLin = Math.max(0, Math.min(1, (rLin - pivot) * contrastFactor + pivot));
+      gLin = Math.max(0, Math.min(1, (gLin - pivot) * contrastFactor + pivot));
+      bLin = Math.max(0, Math.min(1, (bLin - pivot) * contrastFactor + pivot));
     }
 
+    let r = linear01ToSrgbByte(rLin);
+    let g = linear01ToSrgbByte(gLin);
+    let b = linear01ToSrgbByte(bLin);
+
     if (vis.highlights || vis.shadows || vis.whites || vis.blacks) {
-      // Tone LUT requires integer indices; float indexing produces undefined bins.
       r = toneLUT[toLutIndex(r)];
       g = toneLUT[toLutIndex(g)];
       b = toneLUT[toLutIndex(b)];
@@ -181,6 +179,17 @@ export const applyTone = (
       const [h, s, l] = rgbToHsl(r, g, b);
       const newS = clamp(s * satFactor, 0, 1);
       [r, g, b] = hslToRgb(h, newS, l);
+    }
+
+    if (outputDither) {
+      const seed = (i >>> 2) * 747796405 + 2891336453;
+      const noise = (((seed ^ (seed >>> 16)) & 1023) / 1023 - 0.5) / 255;
+      const luma = linearLuminance(SRGB_TO_LINEAR_LUT[r], SRGB_TO_LINEAR_LUT[g], SRGB_TO_LINEAR_LUT[b]);
+      const blend = Math.max(0, Math.min(1, (Math.min(luma, 1 - luma) - 0.03) / 0.09));
+      const applied = noise * (1 - blend + blend * 0.8);
+      r = clampByte(r + applied * 255);
+      g = clampByte(g + applied * 255);
+      b = clampByte(b + applied * 255);
     }
 
     out[i] = r;

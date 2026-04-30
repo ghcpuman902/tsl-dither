@@ -4,6 +4,7 @@
  */
 import { applyDither } from "./dither-processor";
 import { applyTone, computeHistogram } from "./tone-processor";
+import { SRGB_TO_LINEAR_LUT, linear01ToSrgbByte } from "./color-space";
 import type { DownsizeParams } from "./types";
 import type { WorkerRequest, WorkerResponse } from "./worker-types";
 
@@ -79,26 +80,73 @@ const downsizeWithAlgorithm = (
     return new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
   }
 
-  const srcCanvas = new OffscreenCanvas(source.width, source.height);
-  const srcCtx = srcCanvas.getContext("2d", { alpha: false });
-  if (!srcCtx) return new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
-  srcCtx.putImageData(source, 0, 0);
+  const src = source.data;
+  const out = new Uint8ClampedArray(width * height * 4);
+  const xScale = source.width / width;
+  const yScale = source.height / height;
+  const useNearest = params.algorithm === "nearest";
 
-  const outCanvas = new OffscreenCanvas(width, height);
-  const outCtx = outCanvas.getContext("2d", { alpha: false });
-  if (!outCtx) return new ImageData(new Uint8ClampedArray(source.data), source.width, source.height);
+  for (let y = 0; y < height; y++) {
+    const sy = (y + 0.5) * yScale - 0.5;
+    const y0 = Math.max(0, Math.floor(sy));
+    const y1 = Math.min(source.height - 1, y0 + 1);
+    const ty = sy - y0;
 
-  const qualityByAlgorithm: Record<DownsizeParams["algorithm"], ImageSmoothingQuality> = {
-    nearest: "low",
-    bilinear: "low",
-    bicubic: "medium",
-    lanczos: "high",
-  };
+    for (let x = 0; x < width; x++) {
+      const sx = (x + 0.5) * xScale - 0.5;
+      const x0 = Math.max(0, Math.floor(sx));
+      const x1 = Math.min(source.width - 1, x0 + 1);
+      const tx = sx - x0;
 
-  outCtx.imageSmoothingEnabled = params.algorithm !== "nearest";
-  outCtx.imageSmoothingQuality = qualityByAlgorithm[params.algorithm];
-  outCtx.drawImage(srcCanvas, 0, 0, source.width, source.height, 0, 0, width, height);
-  return outCtx.getImageData(0, 0, width, height);
+      const outIdx = (y * width + x) * 4;
+
+      if (useNearest) {
+        const nx = Math.max(0, Math.min(source.width - 1, Math.round(sx)));
+        const ny = Math.max(0, Math.min(source.height - 1, Math.round(sy)));
+        const srcIdx = (ny * source.width + nx) * 4;
+        out[outIdx] = src[srcIdx];
+        out[outIdx + 1] = src[srcIdx + 1];
+        out[outIdx + 2] = src[srcIdx + 2];
+        out[outIdx + 3] = src[srcIdx + 3];
+        continue;
+      }
+
+      const i00 = (y0 * source.width + x0) * 4;
+      const i10 = (y0 * source.width + x1) * 4;
+      const i01 = (y1 * source.width + x0) * 4;
+      const i11 = (y1 * source.width + x1) * 4;
+
+      const w00 = (1 - tx) * (1 - ty);
+      const w10 = tx * (1 - ty);
+      const w01 = (1 - tx) * ty;
+      const w11 = tx * ty;
+
+      const rLin =
+        SRGB_TO_LINEAR_LUT[src[i00]] * w00 +
+        SRGB_TO_LINEAR_LUT[src[i10]] * w10 +
+        SRGB_TO_LINEAR_LUT[src[i01]] * w01 +
+        SRGB_TO_LINEAR_LUT[src[i11]] * w11;
+      const gLin =
+        SRGB_TO_LINEAR_LUT[src[i00 + 1]] * w00 +
+        SRGB_TO_LINEAR_LUT[src[i10 + 1]] * w10 +
+        SRGB_TO_LINEAR_LUT[src[i01 + 1]] * w01 +
+        SRGB_TO_LINEAR_LUT[src[i11 + 1]] * w11;
+      const bLin =
+        SRGB_TO_LINEAR_LUT[src[i00 + 2]] * w00 +
+        SRGB_TO_LINEAR_LUT[src[i10 + 2]] * w10 +
+        SRGB_TO_LINEAR_LUT[src[i01 + 2]] * w01 +
+        SRGB_TO_LINEAR_LUT[src[i11 + 2]] * w11;
+      const alpha =
+        src[i00 + 3] * w00 + src[i10 + 3] * w10 + src[i01 + 3] * w01 + src[i11 + 3] * w11;
+
+      out[outIdx] = linear01ToSrgbByte(rLin);
+      out[outIdx + 1] = linear01ToSrgbByte(gLin);
+      out[outIdx + 2] = linear01ToSrgbByte(bLin);
+      out[outIdx + 3] = Math.round(alpha);
+    }
+  }
+
+  return new ImageData(out, width, height);
 };
 
 workerScope.onmessage = (e: MessageEvent<WorkerRequest>): void => {
@@ -200,7 +248,7 @@ workerScope.onmessage = (e: MessageEvent<WorkerRequest>): void => {
         msg.width,
         msg.height
       );
-      const result = applyTone(imageData, msg.params, msg.visible);
+      const result = applyTone(imageData, msg.params, msg.visible, true);
       const buffer = result.data.buffer.slice(
         result.data.byteOffset,
         result.data.byteOffset + result.data.byteLength

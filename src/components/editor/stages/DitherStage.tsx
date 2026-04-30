@@ -10,12 +10,6 @@ const DITHER_METHODS: { id: DitherMethod; label: string }[] = [
   { id: "threshold", label: "Threshold" },
   { id: "white-noise", label: "White noise" },
   { id: "bayer", label: "Bayer" },
-  { id: "atkinson", label: "Atkinson" },
-  { id: "burkes", label: "Burkes" },
-  { id: "floyd-steinberg", label: "Floyd–Steinberg" },
-  { id: "jjn", label: "Jarvis, Judice & Ninke" },
-  { id: "sierra", label: "Sierra" },
-  { id: "stucki", label: "Stucki" },
 ];
 
 const BAYER_SIZES = [2, 4, 8] as const;
@@ -27,18 +21,6 @@ const INTROS: Record<DitherMethod, string> = {
     "Randomized binary per channel: the cutoff is perturbed by noise so the result is grainier. Density controls how strong the noise is.",
   bayer:
     "Ordered dither using a Bayer threshold matrix (2×2, 4×4, or 8×8). Larger matrices yield finer patterns; each channel is quantized independently.",
-  atkinson:
-    "Atkinson error diffusion: spreads quantization error to six neighbors with 1/8 weights (part of the error is intentionally discarded for a lighter look).",
-  burkes:
-    "Burkes error diffusion: a two-row kernel (divisor 32) that diffuses error across a wider horizontal span than Floyd–Steinberg.",
-  "floyd-steinberg":
-    "Classic Floyd–Steinberg error diffusion: error is distributed to four neighbors on the next rows for smooth gradients.",
-  jjn:
-    "Jarvis, Judice & Ninke: three-row error diffusion (divisor 48) with a wide kernel for very smooth results.",
-  sierra:
-    "Sierra error diffusion: a three-row, 10-neighbor kernel (divisor 32) balancing quality and spread.",
-  stucki:
-    "Stucki error diffusion: a large five-column, three-row kernel (divisor 42) for high-quality diffusion.",
 };
 
 export const DitherStage = () => {

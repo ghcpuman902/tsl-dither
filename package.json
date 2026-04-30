@@ -6,7 +6,11 @@
     "dev": "next dev --port 3737",
     "build": "next build",
     "start": "next start --port 3737",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "bench:cpu": "bun run scripts/bench-cpu.ts",
+    "bench:gpu": "PLAYWRIGHT_BROWSERS_PATH=0 bun run scripts/bench-gpu-chromium.ts",
+    "bench": "bun run bench:cpu && bun run bench:gpu"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -40,8 +44,11 @@
     "@types/three": "^0.183.1",
     "eslint": "^9",
     "eslint-config-next": "^16.2.1",
+    "jsdom": "^29.1.0",
+    "playwright": "^1.59.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   },
   "ignoreScripts": [
     "sharp",

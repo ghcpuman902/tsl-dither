@@ -1,0 +1,17 @@
+{
+  "supported": true,
+  "runtime": "gpu-webgl2-chromium",
+  "width": 2048,
+  "height": 2048,
+  "samples": [
+    0.09999996423721313,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "avgMs": 0.012499995529651642
+}

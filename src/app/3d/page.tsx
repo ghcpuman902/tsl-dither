@@ -155,7 +155,8 @@ const buildConfigurableQuantizedPointCloudNode = (
       .clamp(0.0, 1.0);
 
     const sampledRgb = sampledColorNode.rgb.clamp(0.0, 1.0);
-    const digitalRgb = sampledRgb.pow(vec3(1.0 / 2.2));
+    // Keep digital mode in renderer-managed space to avoid double gamma correction.
+    const digitalRgb = sampledRgb;
 
     const analogMixedRgb = vec3(
       sampledRgb.r.mul(float(1.0).sub(analogCrossTalk.mul(2.0)))

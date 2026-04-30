@@ -6,6 +6,8 @@ import { useProcessingWorkerContext } from "@/lib/processing-worker-context";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { drawImageDataToCanvas, drawRgbaBufferToCanvas, type CanvasPreviewMode } from "@/lib/canvas-preview";
+import { drawDitherPreviewGpu } from "@/lib/gpu-dither-preview";
+import type { DitherParams } from "@/lib/types";
 
 type Props = {
   processedImageData: ImageData | null;
@@ -62,6 +64,8 @@ const DitherChannelCell = ({
   width,
   height,
   previewMode,
+  sourceImage,
+  ditherParams,
 }: {
   kind: ChannelKind;
   label: string;
@@ -69,6 +73,8 @@ const DitherChannelCell = ({
   width: number;
   height: number;
   previewMode: CanvasPreviewMode;
+  sourceImage: ImageData | null;
+  ditherParams: DitherParams;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -89,7 +95,14 @@ const DitherChannelCell = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !buffer || width <= 0 || height <= 0 || size.w <= 0 || size.h <= 0) return;
+    if (!canvas || size.w <= 0 || size.h <= 0) return;
+    if (sourceImage) {
+      const rendered = drawDitherPreviewGpu(canvas, sourceImage, ditherParams, kind, {
+        mode: previewMode,
+      });
+      if (rendered) return;
+    }
+    if (!buffer || width <= 0 || height <= 0) return;
     drawRgbaBufferToCanvas(canvas, {
       buffer,
       width,
@@ -97,7 +110,7 @@ const DitherChannelCell = ({
       mode: previewMode,
       highQualityDownsample: true,
     });
-  }, [kind, buffer, width, height, size.w, size.h, previewMode]);
+  }, [kind, buffer, width, height, size.w, size.h, previewMode, sourceImage, ditherParams]);
 
   return (
     <div
@@ -120,6 +133,7 @@ const DitherChannelCell = ({
 };
 
 export const DitherPreview = ({ processedImageData }: Props) => {
+  const { state } = usePipeline();
   const { ditherResult } = useProcessingWorkerContext();
   const [previewMode, setPreviewMode] = useState<CanvasPreviewMode>("fit");
 
@@ -196,6 +210,8 @@ export const DitherPreview = ({ processedImageData }: Props) => {
               width={data?.width ?? 0}
               height={data?.height ?? 0}
               previewMode={previewMode}
+              sourceImage={processedImageData}
+              ditherParams={state.dither}
             />
           );
         })}
