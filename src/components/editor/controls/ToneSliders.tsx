@@ -2,6 +2,7 @@
 
 import { usePipeline } from "@/lib/pipeline-context";
 import { Slider } from "@/components/ui/slider";
+import { ValueScrubber } from "@/components/ui/value-scrubber";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
@@ -51,9 +52,10 @@ export const ToneSliders = () => {
     <div className="flex flex-col gap-4">
       {SLIDERS.map(({ key, label, min, max, step }) => {
         const visible = state.toneVisible[key];
+        const value = state.tone[key];
 
         return (
-          <div key={key} className="flex flex-col gap-1.5">
+          <div key={key} className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <Button
@@ -81,15 +83,24 @@ export const ToneSliders = () => {
                   {label}
                 </Label>
               </div>
-              <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
-                {formatValue(key, state.tone[key])}
-              </span>
+              <ValueScrubber
+                value={value}
+                onValueChange={(next) => updateTone({ [key]: next })}
+                min={min}
+                max={max}
+                step={step}
+                resetValue={0}
+                formatValue={(v) => formatValue(key, v)}
+                disabled={!visible}
+                aria-label={`${label} value`}
+              />
             </div>
             <Slider
               min={min}
               max={max}
               step={step}
-              value={[state.tone[key]]}
+              value={[value]}
+              resetValue={0}
               onValueChange={(v) => {
                 const sv = Array.isArray(v) ? v[0] : (v as number);
                 updateTone({ [key]: sv });

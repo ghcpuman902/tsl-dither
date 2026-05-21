@@ -2,8 +2,9 @@
 
 import { usePipeline } from "@/lib/pipeline-context";
 import type { DitherMethod } from "@/lib/types";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { DEFAULT_DITHER_PARAMS } from "@/lib/types";
+import { AnimatedSegmentedControl } from "@/components/ui/animated-segmented-control";
+import { ParamSlider } from "@/components/ui/param-slider";
 import { cn } from "@/lib/utils";
 
 const DITHER_METHODS: { id: DitherMethod; label: string }[] = [
@@ -27,17 +28,6 @@ export const DitherStage = () => {
   const { state, updateDither } = usePipeline();
   const { method, threshold, density, bayerSize } = state.dither;
 
-  const handleMethodClick = (id: DitherMethod) => {
-    updateDither({ method: id });
-  };
-
-  const handleMethodKeyDown = (e: React.KeyboardEvent, id: DitherMethod) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleMethodClick(id);
-    }
-  };
-
   const normalizedBayerSize: (typeof BAYER_SIZES)[number] =
     bayerSize <= 2 ? 2 : bayerSize <= 4 ? 4 : 8;
 
@@ -47,86 +37,50 @@ export const DitherStage = () => {
         <span className="text-xs uppercase tracking-wide text-muted-foreground">
           Dither method
         </span>
-        <div
-          className="flex flex-wrap gap-1 rounded-lg border border-border p-1"
-          role="tablist"
-          aria-label="Select dither effect"
-        >
-          {DITHER_METHODS.map(({ id, label }) => {
-            const selected = method === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-label={`${label} dither`}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => handleMethodClick(id)}
-                onKeyDown={(e) => handleMethodKeyDown(e, id)}
-                className={cn(
-                  "rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  selected
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <AnimatedSegmentedControl
+          value={method}
+          onValueChange={(id) => updateDither({ method: id })}
+          ariaLabel="Select dither effect"
+          listClassName="flex flex-wrap gap-1 rounded-lg border border-border p-1"
+          options={DITHER_METHODS.map(({ id, label }) => ({
+            id,
+            label,
+            ariaLabel: `${label} dither`,
+          }))}
+        />
       </div>
 
       <p className="text-xs text-muted-foreground">{INTROS[method]}</p>
 
       <div className="flex flex-col gap-4">
         {method === "threshold" && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium" htmlFor="dither-threshold">
-                Threshold
-              </Label>
-              <span className="tabular-nums text-xs text-muted-foreground">
-                {threshold}%
-              </span>
-            </div>
-            <Slider
-              id="dither-threshold"
-              min={0}
-              max={100}
-              step={1}
-              value={[threshold]}
-              onValueChange={(v) =>
-                updateDither({ threshold: Array.isArray(v) ? v[0] : v })
-              }
-              aria-label="Binary cutoff (0–100%)"
-            />
-          </div>
+          <ParamSlider
+            id="dither-threshold"
+            label="Threshold"
+            min={0}
+            max={100}
+            step={1}
+            value={threshold}
+            resetValue={DEFAULT_DITHER_PARAMS.threshold}
+            formatValue={(v) => `${v}%`}
+            onValueChange={(next) => updateDither({ threshold: next })}
+            aria-label="Binary cutoff (0–100%)"
+          />
         )}
 
         {method === "white-noise" && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-medium" htmlFor="dither-density">
-                Density
-              </Label>
-              <span className="tabular-nums text-xs text-muted-foreground">
-                {density}%
-              </span>
-            </div>
-            <Slider
-              id="dither-density"
-              min={0}
-              max={100}
-              step={1}
-              value={[density]}
-              onValueChange={(v) =>
-                updateDither({ density: Array.isArray(v) ? v[0] : v })
-              }
-              aria-label="Noise strength (0–100%)"
-            />
-          </div>
+          <ParamSlider
+            id="dither-density"
+            label="Density"
+            min={0}
+            max={100}
+            step={1}
+            value={density}
+            resetValue={DEFAULT_DITHER_PARAMS.density}
+            formatValue={(v) => `${v}%`}
+            onValueChange={(next) => updateDither({ density: next })}
+            aria-label="Noise strength (0–100%)"
+          />
         )}
 
         {method === "bayer" && (

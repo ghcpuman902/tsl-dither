@@ -27,6 +27,12 @@ export type ProcessingWorkerActions = {
 
 export type UseProcessingWorkerReturn = ProcessingWorkerState & ProcessingWorkerActions;
 
+type PendingToneRequest = {
+  imageData: ImageData;
+  params: ToneParams;
+  visible: ToneVisible;
+};
+
 export const useProcessingWorker = (): UseProcessingWorkerReturn => {
   const workerRef = useRef<Worker | null>(null);
   const downsizeIdRef = useRef(0);
@@ -37,6 +43,8 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
   const pendingDitherTimeRef = useRef(0);
   const pendingHistogramTimeRef = useRef(0);
   const pendingToneTimeRef = useRef(0);
+  const toneInFlightRef = useRef(false);
+  const pendingToneRequestRef = useRef<PendingToneRequest | null>(null);
 
   const [downsizeResult, setDownsizeResult] = useState<{
     buffer: ArrayBuffer;
@@ -103,17 +111,39 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
           break;
         }
         case "tone-result": {
-          if (msg.id !== toneIdRef.current) return;
+          const latestToneId = toneIdRef.current;
+          if (msg.id !== latestToneId) return;
           if (DEBUG && pendingToneTimeRef.current) {
             const ms = (performance.now() - pendingToneTimeRef.current).toFixed(0);
             console.log(`[Worker] tone result #${msg.id} received (${ms}ms)`);
             pendingToneTimeRef.current = 0;
           }
+          toneInFlightRef.current = false;
           setToneResult({
             buffer: msg.buffer,
             width: msg.width,
             height: msg.height,
           });
+          const pending = pendingToneRequestRef.current;
+          if (pending) {
+            pendingToneRequestRef.current = null;
+            toneInFlightRef.current = true;
+            const nextId = ++toneIdRef.current;
+            const buffer = pending.imageData.data.buffer.slice(
+              pending.imageData.data.byteOffset,
+              pending.imageData.data.byteOffset + pending.imageData.data.byteLength
+            );
+            const req: WorkerRequest = {
+              type: "tone",
+              id: nextId,
+              buffer,
+              width: pending.imageData.width,
+              height: pending.imageData.height,
+              params: pending.params,
+              visible: pending.visible,
+            };
+            workerRef.current?.postMessage(req);
+          }
           break;
         }
       }
@@ -204,6 +234,12 @@ export const useProcessingWorker = (): UseProcessingWorkerReturn => {
 
   const requestTone = useCallback(
     (imageData: ImageData, params: ToneParams, visible: ToneVisible) => {
+      if (toneInFlightRef.current) {
+        pendingToneRequestRef.current = { imageData, params, visible };
+        return;
+      }
+
+      toneInFlightRef.current = true;
       const id = ++toneIdRef.current;
       const buffer = imageData.data.buffer.slice(
         imageData.data.byteOffset,

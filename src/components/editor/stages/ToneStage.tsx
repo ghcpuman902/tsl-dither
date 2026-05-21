@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { RotateCcw } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Info, RotateCcw } from "lucide-react";
 
 export const ToneStage = () => {
   const { resetTone } = usePipeline();
@@ -25,9 +30,33 @@ export const ToneStage = () => {
           <Histogram smooth={!showRawSpikes} />
         </div>
         <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
-          <Label htmlFor="tone-histogram-raw-toggle" className="text-xs text-muted-foreground">
-            Show raw spikes
-          </Label>
+          <div className="flex items-center gap-1">
+            <Label
+              htmlFor="tone-histogram-raw-toggle"
+              className="text-xs text-muted-foreground"
+            >
+              Show raw spikes
+            </Label>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    aria-label="About histogram smoothing"
+                  >
+                    <Info className="size-3" />
+                  </button>
+                }
+              />
+              <TooltipContent side="top" align="start" className="max-w-[260px] text-left leading-relaxed">
+                By default, the histogram is smoothed for better performance on
+                high-frequency data and to match how Photoshop displays
+                histograms—aligning more closely with human perception. Enable
+                this to show exact per-bin spikes.
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <Switch
             id="tone-histogram-raw-toggle"
             size="sm"

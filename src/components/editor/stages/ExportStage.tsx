@@ -16,15 +16,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
-import { cn } from "@/lib/utils";
+import { AnimatedSegmentedControl } from "@/components/ui/animated-segmented-control";
+import { ParamSlider } from "@/components/ui/param-slider";
 
 type ExportFormat = "png" | "jpeg" | "webp";
+
+const DEFAULT_EXPORT_QUALITY = 92;
 
 export const ExportStage = () => {
   const { state, pipelineOutput } = usePipeline();
   const [format, setFormat] = useState<ExportFormat>("png");
-  const [quality, setQuality] = useState(92);
+  const [quality, setQuality] = useState(DEFAULT_EXPORT_QUALITY);
   const [isExporting, setIsExporting] = useState(false);
   const [previewMode, setPreviewMode] = useState<CanvasPreviewMode>("fit");
 
@@ -95,37 +97,19 @@ export const ExportStage = () => {
         <Label className="text-xs uppercase tracking-wide text-muted-foreground">
           Preview
         </Label>
-        <div
-          className="flex w-fit flex-wrap gap-1 rounded-lg border border-border p-1"
-          role="tablist"
-          aria-label="Export preview zoom mode"
-        >
-          {([
-            { id: "fit", label: "Fit" },
-            { id: "pixel-perfect", label: "1:1 px" },
-          ] as const).map(({ id, label }) => {
-            const selected = previewMode === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                tabIndex={selected ? 0 : -1}
-                aria-label={id === "fit" ? "Fit preview to panel" : "Show one source pixel per screen pixel"}
-                onClick={() => setPreviewMode(id)}
-                className={cn(
-                  "rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  selected
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        <AnimatedSegmentedControl
+          value={previewMode}
+          onValueChange={setPreviewMode}
+          ariaLabel="Export preview zoom mode"
+          options={[
+            { id: "fit", label: "Fit", ariaLabel: "Fit preview to panel" },
+            {
+              id: "pixel-perfect",
+              label: "1:1 px",
+              ariaLabel: "Show one source pixel per screen pixel",
+            },
+          ]}
+        />
         <div
           className="aspect-square w-full overflow-hidden rounded-md border border-border bg-black"
           aria-label="What will be exported"
@@ -164,22 +148,17 @@ export const ExportStage = () => {
       </div>
 
       {showQuality && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">Quality</Label>
-            <span className="tabular-nums text-xs text-muted-foreground">
-              {quality}%
-            </span>
-          </div>
-          <Slider
-            min={10}
-            max={100}
-            step={1}
-            value={[quality]}
-            onValueChange={(v) => setQuality(Array.isArray(v) ? v[0] : (v as number))}
-            aria-label="Export quality"
-          />
-        </div>
+        <ParamSlider
+          label="Quality"
+          min={10}
+          max={100}
+          step={1}
+          value={quality}
+          resetValue={DEFAULT_EXPORT_QUALITY}
+          formatValue={(v) => `${v}%`}
+          onValueChange={setQuality}
+          aria-label="Export quality"
+        />
       )}
 
       <Separator />

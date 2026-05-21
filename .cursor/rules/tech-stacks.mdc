@@ -1,7 +1,7 @@
 ---
 alwaysApply: true
 ---
-Please use bun for all commands. That includes bun add, bun run, bun dev, bun build, bunx, etc.
+Please use pnpm for all commands. That includes pnpm add, pnpm run, pnpm dev, pnpm build, pnpm exec, pnpm dlx, etc.
 The main tech stack is Next.js (App Router) + React + Shadcn + Tailwind + Three.js (TSL/WebGPU).
 Try to use '-primary' and dont attempt to add your own background colors.
 Try to make the main part of the component default font size to keep the design consistent.

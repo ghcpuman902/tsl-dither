@@ -13,6 +13,7 @@ import { ToneStage } from "./stages/ToneStage";
 import { DitherStage } from "./stages/DitherStage";
 import { ExportStage } from "./stages/ExportStage";
 import { PipelineOutputFitCanvas } from "./PipelineOutputFitCanvas";
+import { FloatingProjectSummary } from "./FloatingProjectSummary";
 
 const PANEL_WIDTH = 288; // px, 18rem — expand freely later
 
@@ -272,6 +273,8 @@ export const EditorLayout = () => {
           <StagePanel sourceImageData={sourceImageData} />
         </aside>
       </div>
+
+      <FloatingProjectSummary />
     </div>
   );
 };
