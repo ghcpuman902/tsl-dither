@@ -140,11 +140,18 @@ const createContext = (canvas: HTMLCanvasElement): GpuContext | null => {
      void main() {
        vec3 s = texture(uTex, vUv).rgb;
        vec3 lin = vec3(srgbToLinear(s.r), srgbToLinear(s.g), srgbToLinear(s.b));
-       float noise = hash(gl_FragCoord.xy) - 0.5;
-       float t = uThreshold;
-       if (uMode > 0.5 && uMode < 1.5) t = clamp(uThreshold + noise * uDensity, 0.0, 1.0);
-       if (uMode > 1.5) t = bayer(gl_FragCoord.xy, uBayerSize);
-       vec3 q = step(vec3(t), lin);
+       vec3 t = vec3(uThreshold);
+       if (uMode > 0.5 && uMode < 1.5) {
+         float noiseR = hash(gl_FragCoord.xy + vec2(12345.0, 0.0)) - 0.5;
+         float noiseG = hash(gl_FragCoord.xy + vec2(23456.0, 0.0)) - 0.5;
+         float noiseB = hash(gl_FragCoord.xy + vec2(34567.0, 0.0)) - 0.5;
+         t = clamp(vec3(uThreshold) + vec3(noiseR, noiseG, noiseB) * uDensity, 0.0, 1.0);
+       }
+       if (uMode > 1.5) {
+         float b = bayer(gl_FragCoord.xy, uBayerSize);
+         t = vec3(b);
+       }
+       vec3 q = step(t, lin);
        if (uChannel > 0.5 && uChannel < 1.5) q = vec3(q.r);
        else if (uChannel > 1.5 && uChannel < 2.5) q = vec3(q.g);
        else if (uChannel > 2.5) q = vec3(q.b);

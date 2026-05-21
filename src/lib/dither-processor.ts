@@ -1,6 +1,12 @@
 import type { DitherParams, DitherMethod } from "./types";
 import { SRGB_TO_LINEAR_LUT } from "./color-space";
 
+/** Per-channel white-noise seeds (match 3D TSL dither in `src/app/3d/page.tsx`). */
+const NOISE_SEED_R = 12345;
+const NOISE_SEED_G = 23456;
+const NOISE_SEED_B = 34567;
+const NOISE_SEED_BY_CHANNEL: readonly number[] = [NOISE_SEED_R, NOISE_SEED_G, NOISE_SEED_B];
+
 /**
  * Deterministic RNG keyed by seed and index. Returns 0–1.
  * Same image + params produce the same dither output.
@@ -32,9 +38,10 @@ const whiteNoiseBinaryLinear = (
   encodedByte: number,
   threshold01: number,
   density01: number,
-  pixelIndex: number
+  pixelIndex: number,
+  seed: number
 ): number => {
-  const r = seededRandom(12345, pixelIndex);
+  const r = seededRandom(seed, pixelIndex);
   const noise = (r - 0.5) * density01;
   const t = Math.max(0, Math.min(1, threshold01 + noise));
   const linearValue = SRGB_TO_LINEAR_LUT[encodedByte];
@@ -124,7 +131,13 @@ const pointDitherChannel = (
         outVal = binaryThresholdLinear(v, threshold01);
         break;
       case "white-noise":
-        outVal = whiteNoiseBinaryLinear(v, threshold01, density01, i);
+        outVal = whiteNoiseBinaryLinear(
+          v,
+          threshold01,
+          density01,
+          i,
+          NOISE_SEED_BY_CHANNEL[channelOffset] ?? NOISE_SEED_R
+        );
         break;
       default:
         outVal = binaryThresholdLinear(v, threshold01);

@@ -80,6 +80,28 @@ describe("tone and dither brightness", () => {
     expect(a.data).toEqual(b.data);
   });
 
+  it("white-noise uses independent seeds per RGB channel", () => {
+    const size = 32;
+    const data = new Uint8ClampedArray(size * size * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = 128;
+      data[i + 1] = 128;
+      data[i + 2] = 128;
+      data[i + 3] = 255;
+    }
+    const img = new ImageData(data, size, size);
+    const params: DitherParams = { method: "white-noise", threshold: 50, density: 100, bayerSize: 4 };
+    const out = applyDither(img, params);
+    let chromaticPixels = 0;
+    for (let i = 0; i < out.data.length; i += 4) {
+      const r = out.data[i];
+      const g = out.data[i + 1];
+      const b = out.data[i + 2];
+      if (r !== g || g !== b) chromaticPixels++;
+    }
+    expect(chromaticPixels).toBeGreaterThan(0);
+  });
+
   it("linear midpoint re-encodes to expected sRGB", () => {
     expect(linear01ToSrgbByte(0.5)).toBeGreaterThanOrEqual(187);
     expect(linear01ToSrgbByte(0.5)).toBeLessThanOrEqual(188);
