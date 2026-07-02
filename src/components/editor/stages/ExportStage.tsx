@@ -175,7 +175,7 @@ export const ExportStage = () => {
 
       <p className="text-xs text-muted-foreground">
         {pipelineOutput
-          ? "Exports what you see above: dithered RGB if you opened Dither, otherwise the latest Load/Tone preview."
+          ? "Exports what you see above: the dithered result of the current pipeline."
           : "Load an image so the preview pipeline can produce a frame, then export."}
       </p>
     </div>

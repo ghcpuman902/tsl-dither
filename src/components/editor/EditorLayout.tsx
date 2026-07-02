@@ -132,7 +132,7 @@ export const EditorLayout = () => {
   }, [state.sourceImageSrc]);
 
   useEffect(() => {
-    if (state.activeStage === "dither") {
+    if (state.activeStage === "dither" || state.activeStage === "export") {
       visitedDitherStageRef.current = true;
     }
   }, [state.activeStage]);
@@ -179,8 +179,14 @@ export const EditorLayout = () => {
     state.activeStage,
   ]);
 
+  // Dither also needs to run when landing on/navigating to Export directly
+  // (e.g. restored from localStorage, or clicked straight from Load) so Export
+  // always has dithered pixels to show/download, not just a tone-adjusted frame.
+  const needsDither =
+    state.activeStage === "dither" || state.activeStage === "export";
+
   useEffect(() => {
-    if (state.activeStage !== "dither" || !processedImageData) {
+    if (!needsDither || !processedImageData) {
       pendingDitherRef.current = null;
       return;
     }
@@ -194,13 +200,13 @@ export const EditorLayout = () => {
     }
 
     pendingDitherRef.current = dither;
-  }, [state.activeStage, state.dither, processedImageData, requestDither]);
+  }, [needsDither, state.dither, processedImageData, requestDither]);
 
   useEffect(() => {
     if (!ditherResult) return;
     ditherInFlightRef.current = false;
 
-    if (state.activeStage !== "dither") {
+    if (!needsDither) {
       pendingDitherRef.current = null;
       return;
     }
@@ -211,7 +217,7 @@ export const EditorLayout = () => {
     pendingDitherRef.current = null;
     ditherInFlightRef.current = true;
     requestDither(pending);
-  }, [ditherResult, state.activeStage, requestDither]);
+  }, [ditherResult, needsDither, requestDither]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">

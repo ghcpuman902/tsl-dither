@@ -68,7 +68,7 @@ export type DitherParams = {
 
 export const DEFAULT_DITHER_PARAMS: DitherParams = {
   method: "threshold",
-  threshold: 50,
+  threshold: 18,
   density: 50,
   bayerSize: 4,
 };
