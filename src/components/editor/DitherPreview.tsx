@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePipeline } from "@/lib/pipeline-context";
-import { useProcessingWorkerContext } from "@/lib/processing-worker-context";
+import { memo, useContext, useEffect, useRef, useState, createContext } from "react";
+import { usePipelineState } from "@/lib/pipeline-context";
+import { useDitherResult } from "@/lib/processing-worker-context";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { drawImageDataToCanvas, drawRgbaBufferToCanvas, type CanvasPreviewMode } from "@/lib/canvas-preview";
@@ -23,6 +23,10 @@ const CHANNEL_CELLS: { kind: ChannelKind; label: string }[] = [
 ];
 
 const INCOMING_CSS = 200;
+
+const DitherPreviewModeContext = createContext<CanvasPreviewMode>("fit");
+
+const useDitherPreviewMode = (): CanvasPreviewMode => useContext(DitherPreviewModeContext);
 
 const IncomingCell = ({ imageData }: { imageData: ImageData | null }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,25 +61,26 @@ const IncomingCell = ({ imageData }: { imageData: ImageData | null }) => {
   );
 };
 
-const DitherChannelCell = ({
-  kind,
-  label,
-  buffer,
-  width,
-  height,
-  previewMode,
-  sourceImage,
-  ditherParams,
-}: {
+type DitherChannelCellProps = {
   kind: ChannelKind;
   label: string;
   buffer: ArrayBuffer | null;
   width: number;
   height: number;
-  previewMode: CanvasPreviewMode;
   sourceImage: ImageData | null;
   ditherParams: DitherParams;
-}) => {
+};
+
+const DitherChannelCell = memo(function DitherChannelCell({
+  kind,
+  label,
+  buffer,
+  width,
+  height,
+  sourceImage,
+  ditherParams,
+}: DitherChannelCellProps) {
+  const previewMode = useDitherPreviewMode();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -130,15 +135,65 @@ const DitherChannelCell = ({
       </div>
     </div>
   );
-};
+});
 
-export const DitherPreview = ({ processedImageData }: Props) => {
-  const { state } = usePipeline();
-  const { ditherResult } = useProcessingWorkerContext();
-  const [previewMode, setPreviewMode] = useState<CanvasPreviewMode>("fit");
+const DitherPreviewModeTabs = ({
+  previewMode,
+  onPreviewModeChange,
+}: {
+  previewMode: CanvasPreviewMode;
+  onPreviewModeChange: (mode: CanvasPreviewMode) => void;
+}) => (
+  <div className="absolute right-2 top-2 z-10">
+    <div
+      className="flex w-fit flex-wrap gap-1 rounded-lg border border-border bg-background/85 p-1 backdrop-blur-sm"
+      role="tablist"
+      aria-label="Dither preview zoom mode"
+    >
+      {([
+        { id: "fit", label: "Fit" },
+        { id: "pixel-perfect", label: "1:1 px" },
+      ] as const).map(({ id, label }) => {
+        const selected = previewMode === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            aria-label={
+              id === "fit"
+                ? "Fit all channel previews to panel"
+                : "Show one source pixel per screen pixel"
+            }
+            onClick={() => onPreviewModeChange(id)}
+            className={cn(
+              "rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              selected
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
+const DitherPreviewGrid = ({
+  processedImageData,
+  ditherParams,
+}: {
+  processedImageData: ImageData | null;
+  ditherParams: DitherParams;
+}) => {
+  const ditherResult = useDitherResult();
 
   const getBufferForKind = (
-    kind: ChannelKind
+    kind: ChannelKind,
   ): { buffer: ArrayBuffer; width: number; height: number } | null => {
     if (!ditherResult) return null;
     const { width, height, rgbBuffer, rBuffer, gBuffer, bBuffer } = ditherResult;
@@ -157,65 +212,48 @@ export const DitherPreview = ({ processedImageData }: Props) => {
   };
 
   return (
-    <div className="absolute inset-0 flex flex-col overflow-hidden">
-      <IncomingCell imageData={processedImageData} />
-      <div className="absolute right-2 top-2 z-10">
-        <div
-          className="flex w-fit flex-wrap gap-1 rounded-lg border border-border bg-background/85 p-1 backdrop-blur-sm"
-          role="tablist"
-          aria-label="Dither preview zoom mode"
-        >
-          {([
-            { id: "fit", label: "Fit" },
-            { id: "pixel-perfect", label: "1:1 px" },
-          ] as const).map(({ id, label }) => {
-            const selected = previewMode === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                tabIndex={selected ? 0 : -1}
-                aria-label={id === "fit" ? "Fit all channel previews to panel" : "Show one source pixel per screen pixel"}
-                onClick={() => setPreviewMode(id)}
-                className={cn(
-                  "rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  selected
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div
-        className="grid h-full w-full grid-cols-2 grid-rows-2 gap-1 p-1"
-        style={{ gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr" }}
-        role="grid"
-        aria-label="Dither channel preview grid"
-      >
-        {CHANNEL_CELLS.map(({ kind, label }) => {
-          const data = getBufferForKind(kind);
-          return (
-            <DitherChannelCell
-              key={kind}
-              kind={kind}
-              label={label}
-              buffer={data?.buffer ?? null}
-              width={data?.width ?? 0}
-              height={data?.height ?? 0}
-              previewMode={previewMode}
-              sourceImage={processedImageData}
-              ditherParams={state.dither}
-            />
-          );
-        })}
-      </div>
+    <div
+      className="grid h-full w-full grid-cols-2 grid-rows-2 gap-1 p-1"
+      style={{ gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr" }}
+      role="grid"
+      aria-label="Dither channel preview grid"
+    >
+      {CHANNEL_CELLS.map(({ kind, label }) => {
+        const data = getBufferForKind(kind);
+        return (
+          <DitherChannelCell
+            key={kind}
+            kind={kind}
+            label={label}
+            buffer={data?.buffer ?? null}
+            width={data?.width ?? 0}
+            height={data?.height ?? 0}
+            sourceImage={processedImageData}
+            ditherParams={ditherParams}
+          />
+        );
+      })}
     </div>
+  );
+};
+
+export const DitherPreview = ({ processedImageData }: Props) => {
+  const { state } = usePipelineState();
+  const [previewMode, setPreviewMode] = useState<CanvasPreviewMode>("fit");
+
+  return (
+    <DitherPreviewModeContext.Provider value={previewMode}>
+      <div className="absolute inset-0 flex flex-col overflow-hidden">
+        <IncomingCell imageData={processedImageData} />
+        <DitherPreviewModeTabs
+          previewMode={previewMode}
+          onPreviewModeChange={setPreviewMode}
+        />
+        <DitherPreviewGrid
+          processedImageData={processedImageData}
+          ditherParams={state.dither}
+        />
+      </div>
+    </DitherPreviewModeContext.Provider>
   );
 };

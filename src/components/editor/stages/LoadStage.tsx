@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Image from "next/image";
 import { ImageIcon, Upload } from "lucide-react";
-import { usePipeline, SOURCE_IMAGE_FILENAME_KEY } from "@/lib/pipeline-context";
+import { usePipelineActions, usePipelineState, SOURCE_IMAGE_FILENAME_KEY } from "@/lib/pipeline-context";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -40,7 +40,8 @@ const SAMPLE_IMAGES: SampleImage[] = [
 ];
 
 export const LoadStage = () => {
-  const { state, setSourceImageFromFile, setSourceImageSrc } = usePipeline();
+  const { state } = usePipelineState();
+  const { setSourceImageFromFile, setSourceImageSrc } = usePipelineActions();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

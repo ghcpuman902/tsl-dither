@@ -1,90 +1,90 @@
 {
-  "generatedAt": "2026-04-29T09:47:04.156Z",
+  "generatedAt": "2026-07-02T09:43:49.671Z",
   "runtime": "cpu",
   "rows": [
     {
       "case": "1mp",
       "width": 1024,
       "height": 1024,
-      "downsize_ms": 26.18,
-      "tone_ms": 62.97
+      "downsize_ms": 32.74,
+      "tone_ms": 110.46
     },
     {
       "case": "1mp_threshold",
       "width": 512,
       "height": 512,
       "stage": "dither",
-      "ms": 3.8
+      "ms": 5.9
     },
     {
       "case": "1mp_white-noise",
       "width": 512,
       "height": 512,
       "stage": "dither",
-      "ms": 11.46
+      "ms": 13.2
     },
     {
       "case": "1mp_bayer",
       "width": 512,
       "height": 512,
       "stage": "dither",
-      "ms": 3.92
+      "ms": 6.78
     },
     {
       "case": "4mp",
       "width": 2048,
       "height": 2048,
-      "downsize_ms": 82.46,
-      "tone_ms": 190.02
+      "downsize_ms": 72.64,
+      "tone_ms": 385.64
     },
     {
       "case": "4mp_threshold",
       "width": 1024,
       "height": 1024,
       "stage": "dither",
-      "ms": 4.2
+      "ms": 14.52
     },
     {
       "case": "4mp_white-noise",
       "width": 1024,
       "height": 1024,
       "stage": "dither",
-      "ms": 8.99
+      "ms": 25.79
     },
     {
       "case": "4mp_bayer",
       "width": 1024,
       "height": 1024,
       "stage": "dither",
-      "ms": 7.65
+      "ms": 9.49
     },
     {
       "case": "8mp",
       "width": 3264,
       "height": 2448,
-      "downsize_ms": 99.41,
-      "tone_ms": 233.85
+      "downsize_ms": 160.55,
+      "tone_ms": 831.71
     },
     {
       "case": "8mp_threshold",
       "width": 1632,
       "height": 1224,
       "stage": "dither",
-      "ms": 7.9
+      "ms": 26.09
     },
     {
       "case": "8mp_white-noise",
       "width": 1632,
       "height": 1224,
       "stage": "dither",
-      "ms": 16.43
+      "ms": 49.21
     },
     {
       "case": "8mp_bayer",
       "width": 1632,
       "height": 1224,
       "stage": "dither",
-      "ms": 12.62
+      "ms": 21.28
     }
   ]
 }

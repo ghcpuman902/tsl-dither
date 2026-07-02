@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePipeline } from "@/lib/pipeline-context";
+import { usePipelineState } from "@/lib/pipeline-context";
 
 type Props = {
   onProcessed?: (imageData: ImageData) => void;
@@ -15,8 +15,9 @@ const isValidProcessedFrame = (img: ImageData): boolean =>
   img.data.length === img.width * img.height * 4;
 
 export const PreviewCanvas = ({ onProcessed }: Props) => {
-  const { state } = usePipeline();
+  const { state } = usePipelineState();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [loadedImg, setLoadedImg] = useState<HTMLImageElement | null>(null);
   const [pixelatedPreview, setPixelatedPreview] = useState(false);
   const rafRef = useRef(0);
@@ -61,16 +62,19 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
     const shouldPixelate = drawW > sourceW || drawH > sourceH;
     setPixelatedPreview((prev) => (prev === shouldPixelate ? prev : shouldPixelate));
 
-    // Keep a stable processing frame for the whole pipeline.
-    // When preview is larger than source, process at source resolution.
     const processScale = shouldPixelate
       ? 1
       : Math.min(drawW / sourceW, drawH / sourceH);
     const w = Math.max(1, Math.round(sourceW * processScale));
     const h = Math.max(1, Math.round(sourceH * processScale));
-    const offscreen = document.createElement("canvas");
-    offscreen.width = w;
-    offscreen.height = h;
+
+    if (!offscreenCanvasRef.current) {
+      offscreenCanvasRef.current = document.createElement("canvas");
+    }
+    const offscreen = offscreenCanvasRef.current;
+    if (offscreen.width !== w) offscreen.width = w;
+    if (offscreen.height !== h) offscreen.height = h;
+
     const offCtx = offscreen.getContext("2d");
     if (!offCtx) return;
     offCtx.imageSmoothingEnabled = !shouldPixelate;
@@ -90,7 +94,7 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
       lastProcessedRef.current = new ImageData(
         new Uint8ClampedArray(baseImageData.data),
         baseImageData.width,
-        baseImageData.height
+        baseImageData.height,
       );
       window.clearTimeout(histogramTimerRef.current);
       histogramTimerRef.current = window.setTimeout(() => {

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useProcessingWorkerContext } from "@/lib/processing-worker-context";
+import { useHistogramResult } from "@/lib/processing-worker-context";
 
 const CANVAS_WIDTH = 256;
 const CANVAS_HEIGHT = 80;
+
+export type HistogramMode = "smooth" | "raw";
 
 const isValidHistogram = (r: number[], g: number[], b: number[]): boolean => {
   if (
@@ -19,13 +21,28 @@ const isValidHistogram = (r: number[], g: number[], b: number[]): boolean => {
   }
   const allFinite = (arr: number[]) => arr.every((n) => Number.isFinite(n));
   if (!allFinite(r) || !allFinite(g) || !allFinite(b)) return false;
-  const dataMax = Math.max(...r, ...g, ...b);
+  let dataMax = 0;
+  for (let i = 0; i < 256; i++) {
+    if (r[i] > dataMax) dataMax = r[i];
+    if (g[i] > dataMax) dataMax = g[i];
+    if (b[i] > dataMax) dataMax = b[i];
+  }
   if (dataMax <= 0) return false;
   return true;
 };
 
+const maxOfBins = (a: number[], b: number[], c: number[], fallback: number): number => {
+  let max = fallback;
+  for (let i = 0; i < 256; i++) {
+    if (a[i] > max) max = a[i];
+    if (b[i] > max) max = b[i];
+    if (c[i] > max) max = c[i];
+  }
+  return max;
+};
+
 type Props = {
-  smooth?: boolean;
+  mode?: HistogramMode;
 };
 
 const smoothBins = (bins: number[]): number[] => {
@@ -37,16 +54,16 @@ const smoothBins = (bins: number[]): number[] => {
     const c = bins[i];
     const d = bins[Math.min(255, i + 1)];
     const e = bins[Math.min(255, i + 2)];
-    // 5-tap gaussian-like smoothing: [1,4,6,4,1] / 16
     out[i] = (a + 4 * b + 6 * c + 4 * d + e) / 16;
   }
   return out;
 };
 
-export const Histogram = ({ smooth = true }: Props) => {
+export const Histogram = ({ mode = "smooth" }: Props) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastValidRef = useRef<{ r: number[]; g: number[]; b: number[] } | null>(null);
-  const { histogramResult } = useProcessingWorkerContext();
+  const histogramResult = useHistogramResult();
+  const smooth = mode === "smooth";
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -80,11 +97,9 @@ export const Histogram = ({ smooth = true }: Props) => {
     const sourceR = smooth ? smoothBins(dataToDraw.r) : dataToDraw.r;
     const sourceG = smooth ? smoothBins(dataToDraw.g) : dataToDraw.g;
     const sourceB = smooth ? smoothBins(dataToDraw.b) : dataToDraw.b;
-    const rawMax = Math.max(...sourceR, ...sourceG, ...sourceB, 1);
+    const rawMax = maxOfBins(sourceR, sourceG, sourceB, 1);
     if (!Number.isFinite(rawMax) || rawMax <= 0) return;
 
-    // Log scale: log(count + 1) / log(rawMax + 1) keeps small peaks visible
-    // even when one extreme bin dominates (e.g. solid black region).
     const logMax = Math.log(rawMax + 1);
     const toY = (count: number) => h - (Math.log(count + 1) / logMax) * h;
 

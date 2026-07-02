@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, type ChangeEvent } from "react";
-import { usePipeline } from "@/lib/pipeline-context";
+import { usePipelineActions, usePipelineState } from "@/lib/pipeline-context";
 import type { DownsizeAlgorithm, DownsizeRatioDivisor } from "@/lib/types";
 import { AnimatedSegmentedControl } from "@/components/ui/animated-segmented-control";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,8 @@ const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
 export const DownsizeStage = ({ sourceWidth, sourceHeight }: Props) => {
-  const { state, updateDownsize } = usePipeline();
+  const { state } = usePipelineState();
+  const { updateDownsize } = usePipelineActions();
   const { downsize } = state;
 
   const selectedAlgorithm =

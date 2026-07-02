@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { usePipeline } from "@/lib/pipeline-context";
+import { usePipelineActions } from "@/lib/pipeline-context";
 import { Histogram } from "@/components/editor/Histogram";
 import { ToneSliders } from "@/components/editor/controls/ToneSliders";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
 import { Info, RotateCcw } from "lucide-react";
 
 export const ToneStage = () => {
-  const { resetTone } = usePipeline();
+  const { resetTone } = usePipelineActions();
   const [showRawSpikes, setShowRawSpikes] = useState(false);
 
   return (
@@ -27,7 +27,7 @@ export const ToneStage = () => {
           Histogram
         </span>
         <div className="min-h-[84px] rounded-md bg-black/60 p-2">
-          <Histogram smooth={!showRawSpikes} />
+          <Histogram mode={showRawSpikes ? "raw" : "smooth"} />
         </div>
         <div className="flex items-center justify-between rounded-md border border-border px-2 py-1.5">
           <div className="flex items-center gap-1">

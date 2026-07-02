@@ -321,51 +321,51 @@ type StoredPipeline = { v: 1; state: PipelineState };
 
 ### 1. Eliminating waterfalls — **needs work**
 
-- [ ] Coalesce pipeline worker scheduling (see P0 #1)
+- [x] Coalesce pipeline worker scheduling (see P0 #1)
 - [x] Worker stale-response guards
-- [ ] Parallel independent worker ops where safe
+- [x] Parallel independent worker ops where safe (histogram off tone path)
 
 ### 2. Bundle size — **good base, gaps on stages/3d**
 
 - [x] Dynamic editor shell
-- [ ] Dynamic stage imports
-- [ ] Dynamic 3D scene module
+- [x] Dynamic stage imports
+- [x] Dynamic 3D scene module
 - [x] Direct component imports
 
 ### 3. Server-side — **N/A / minimal app**
 
 - [x] Metadata hoisted in layouts
-- [ ] Scope client providers to editor routes only
+- [x] Scope client providers to editor routes only
 - N/A Server Actions (none in app)
 
 ### 4. Client data fetching — **acceptable**
 
 - N/A SWR (no remote client fetch in editor)
-- [ ] Version localStorage schema
+- [x] Version localStorage schema
 
 ### 5. Re-render optimization — **primary improvement area**
 
-- [ ] Context splitting / selectors
-- [ ] `startTransition` on param updates
-- [ ] `useDeferredValue` for previews
+- [x] Context splitting / selectors
+- [x] `startTransition` on param updates
+- [x] `useDeferredValue` for previews
 - [x] Functional setState in pipeline
 
 ### 6. Rendering performance — **mixed**
 
 - [x] Passive scroll listeners
 - [x] `useReducedMotion` in motion components
-- [ ] Reuse offscreen canvas in PreviewCanvas
-- [ ] Memoize heavy grid cells
+- [x] Reuse offscreen canvas in PreviewCanvas
+- [x] Memoize heavy grid cells
 
 ### 7. JavaScript performance — **acceptable for image app**
 
 - Worker handles CPU-heavy paths (good)
-- Minor histogram max-loop opportunity
+- [x] Histogram max-loop optimization
 
 ### 8. Advanced patterns — **partially applied**
 
 - [x] Worker init once
-- [ ] Event handler refs for pipeline coordinator callbacks invoked from effects
+- [x] Pipeline coordinator replaces cascading effect chain
 
 ---
 

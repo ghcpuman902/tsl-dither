@@ -1,19 +1,17 @@
 "use client";
 
-import { usePipeline } from "@/lib/pipeline-context";
+import { usePipelineActions, usePipelineState } from "@/lib/pipeline-context";
 import type { DitherMethod } from "@/lib/types";
-import { DEFAULT_DITHER_PARAMS } from "@/lib/types";
 import { AnimatedSegmentedControl } from "@/components/ui/animated-segmented-control";
-import { ParamSlider } from "@/components/ui/param-slider";
-import { cn } from "@/lib/utils";
+import { ThresholdControls } from "./dither/ThresholdControls";
+import { WhiteNoiseControls } from "./dither/WhiteNoiseControls";
+import { BayerControls } from "./dither/BayerControls";
 
 const DITHER_METHODS: { id: DitherMethod; label: string }[] = [
   { id: "threshold", label: "Threshold" },
   { id: "white-noise", label: "White noise" },
   { id: "bayer", label: "Bayer" },
 ];
-
-const BAYER_SIZES = [2, 4, 8] as const;
 
 const INTROS: Record<DitherMethod, string> = {
   threshold:
@@ -25,11 +23,9 @@ const INTROS: Record<DitherMethod, string> = {
 };
 
 export const DitherStage = () => {
-  const { state, updateDither } = usePipeline();
+  const { state } = usePipelineState();
+  const { updateDither } = usePipelineActions();
   const { method, threshold, density, bayerSize } = state.dither;
-
-  const normalizedBayerSize: (typeof BAYER_SIZES)[number] =
-    bayerSize <= 2 ? 2 : bayerSize <= 4 ? 4 : 8;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -53,75 +49,24 @@ export const DitherStage = () => {
       <p className="text-xs text-muted-foreground">{INTROS[method]}</p>
 
       <div className="flex flex-col gap-4">
-        {method === "threshold" && (
-          <ParamSlider
-            id="dither-threshold"
-            label="Threshold"
-            min={0}
-            max={100}
-            step={1}
-            value={threshold}
-            resetValue={DEFAULT_DITHER_PARAMS.threshold}
-            formatValue={(v) => `${v}%`}
-            onValueChange={(next) => updateDither({ threshold: next })}
-            aria-label="Binary cutoff (0–100%)"
+        {method === "threshold" ? (
+          <ThresholdControls
+            threshold={threshold}
+            onThresholdChange={(next) => updateDither({ threshold: next })}
           />
-        )}
-
-        {method === "white-noise" && (
-          <ParamSlider
-            id="dither-density"
-            label="Density"
-            min={0}
-            max={100}
-            step={1}
-            value={density}
-            resetValue={DEFAULT_DITHER_PARAMS.density}
-            formatValue={(v) => `${v}%`}
-            onValueChange={(next) => updateDither({ density: next })}
-            aria-label="Noise strength (0–100%)"
+        ) : null}
+        {method === "white-noise" ? (
+          <WhiteNoiseControls
+            density={density}
+            onDensityChange={(next) => updateDither({ density: next })}
           />
-        )}
-
-        {method === "bayer" && (
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-foreground">Matrix size</span>
-            <div
-              className="flex flex-wrap gap-1 rounded-lg border border-border p-1"
-              role="tablist"
-              aria-label="Bayer matrix size"
-            >
-              {BAYER_SIZES.map((size) => {
-                const selected = normalizedBayerSize === size;
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    aria-label={`Bayer ${size} by ${size} matrix`}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => updateDither({ bayerSize: size })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        updateDither({ bayerSize: size });
-                      }
-                    }}
-                    className={cn(
-                      "min-w-12 rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      selected
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    {size}×{size}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        ) : null}
+        {method === "bayer" ? (
+          <BayerControls
+            bayerSize={bayerSize}
+            onBayerSizeChange={(size) => updateDither({ bayerSize: size })}
+          />
+        ) : null}
       </div>
     </div>
   );

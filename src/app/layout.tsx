@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { JsonLd } from "@/components/seo/json-ld";
-import { PipelineProvider } from "@/lib/pipeline-context";
 import { siteConfig } from "@/lib/site";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -92,9 +91,7 @@ export default function RootLayout({
     >
       <body className="antialiased">
         <JsonLd />
-        <PipelineProvider>
-          <TooltipProvider>{children}</TooltipProvider>
-        </PipelineProvider>
+        <TooltipProvider>{children}</TooltipProvider>
       </body>
     </html>
   );

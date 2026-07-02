@@ -1,6 +1,6 @@
 "use client";
 
-import { usePipeline } from "@/lib/pipeline-context";
+import { usePipelineActions, usePipelineState } from "@/lib/pipeline-context";
 import { Slider } from "@/components/ui/slider";
 import { ValueScrubber } from "@/components/ui/value-scrubber";
 import { Label } from "@/components/ui/label";
@@ -34,7 +34,8 @@ const formatValue = (key: keyof ToneParams, value: number): string => {
 };
 
 export const ToneSliders = () => {
-  const { state, updateTone, updateToneVisible } = usePipeline();
+  const { state } = usePipelineState();
+  const { updateTone, updateToneVisible } = usePipelineActions();
 
   const handleEyeClick = (key: keyof ToneParams) => {
     const visible = state.toneVisible[key];

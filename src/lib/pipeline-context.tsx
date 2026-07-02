@@ -1,10 +1,20 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type {
-  PipelineContextType,
-  PipelineState,
+  PipelineActions,
+  PipelineMeta,
   PipelineOutput,
+  PipelineState,
+  PipelineStateContextValue,
   ToneParams,
   DitherParams,
   DownsizeParams,
@@ -23,6 +33,7 @@ import {
 } from "./source-image-db";
 
 const STORAGE_KEY = "tsl-dither-pipeline";
+const STORAGE_VERSION = 1;
 export const SOURCE_IMAGE_FILENAME_KEY = "tsl-dither-source-image-filename";
 const DEFAULT_IMAGE_SRC = "/DSC04192_LowRes.jpg";
 
@@ -35,36 +46,56 @@ const DEFAULT_STATE: PipelineState = {
   dither: DEFAULT_DITHER_PARAMS,
 };
 
+type StoredPipelineEnvelope = {
+  v: number;
+  state: Partial<PipelineState>;
+};
+
+const normalizePipelineState = (parsed: Partial<PipelineState>): PipelineState => {
+  const sourceImageSrc =
+    typeof parsed.sourceImageSrc === "string" && parsed.sourceImageSrc.startsWith("blob:")
+      ? DEFAULT_IMAGE_SRC
+      : (parsed.sourceImageSrc ?? DEFAULT_STATE.sourceImageSrc);
+  const rawActiveStage = (parsed as { activeStage?: string }).activeStage;
+  const activeStage: StageId =
+    rawActiveStage === "channel-preview"
+      ? "dither"
+      : (parsed.activeStage ?? DEFAULT_STATE.activeStage);
+  return {
+    ...DEFAULT_STATE,
+    ...parsed,
+    sourceImageSrc,
+    activeStage,
+    downsize: { ...DEFAULT_DOWNSIZE_PARAMS, ...(parsed.downsize ?? {}) },
+    tone: { ...DEFAULT_TONE_PARAMS, ...(parsed.tone ?? {}) },
+    toneVisible: { ...DEFAULT_TONE_VISIBLE, ...(parsed.toneVisible ?? {}) },
+    dither: { ...DEFAULT_DITHER_PARAMS, ...(parsed.dither ?? {}) },
+  };
+};
+
 const loadFromStorage = (): PipelineState => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return DEFAULT_STATE;
-    const parsed = JSON.parse(stored) as Partial<PipelineState>;
-    const sourceImageSrc =
-      typeof parsed.sourceImageSrc === "string" && parsed.sourceImageSrc.startsWith("blob:")
-        ? DEFAULT_IMAGE_SRC
-        : (parsed.sourceImageSrc ?? DEFAULT_STATE.sourceImageSrc);
-    const rawActiveStage = (parsed as { activeStage?: string }).activeStage;
-    const activeStage: StageId =
-      rawActiveStage === "channel-preview"
-        ? "dither"
-        : (parsed.activeStage ?? DEFAULT_STATE.activeStage);
-    return {
-      ...DEFAULT_STATE,
-      ...parsed,
-      sourceImageSrc,
-      activeStage,
-      downsize: { ...DEFAULT_DOWNSIZE_PARAMS, ...(parsed.downsize ?? {}) },
-      tone: { ...DEFAULT_TONE_PARAMS, ...(parsed.tone ?? {}) },
-      toneVisible: { ...DEFAULT_TONE_VISIBLE, ...(parsed.toneVisible ?? {}) },
-      dither: { ...DEFAULT_DITHER_PARAMS, ...(parsed.dither ?? {}) },
-    };
+
+    const parsed = JSON.parse(stored) as StoredPipelineEnvelope | Partial<PipelineState>;
+
+    if ("v" in parsed && typeof parsed.v === "number") {
+      if (parsed.v !== STORAGE_VERSION) {
+        return normalizePipelineState(parsed.state ?? {});
+      }
+      return normalizePipelineState(parsed.state ?? {});
+    }
+
+    return normalizePipelineState(parsed as Partial<PipelineState>);
   } catch {
     return DEFAULT_STATE;
   }
 };
 
-const PipelineContext = createContext<PipelineContextType | null>(null);
+const PipelineStateContext = createContext<PipelineStateContextValue | null>(null);
+const PipelineActionsContext = createContext<PipelineActions | null>(null);
+const PipelineMetaContext = createContext<PipelineMeta | null>(null);
 
 export const PipelineProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<PipelineState>(() => {
@@ -72,6 +103,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     return loadFromStorage();
   });
   const [pipelineOutput, setPipelineOutputState] = useState<PipelineOutput | null>(null);
+  const [isHydrated] = useState(() => typeof window !== "undefined");
 
   const setPipelineOutput = useCallback((output: PipelineOutput | null) => {
     setPipelineOutputState(output);
@@ -104,11 +136,13 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
   }, []);
 
   useEffect(() => {
+    if (!isHydrated) return;
     const timer = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      const envelope: StoredPipelineEnvelope = { v: STORAGE_VERSION, state };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(envelope));
     }, 500);
     return () => clearTimeout(timer);
-  }, [state]);
+  }, [state, isHydrated]);
 
   const setSourceImageSrc = useCallback((src: string) => {
     if (!src.startsWith("blob:")) {
@@ -124,7 +158,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     setState((prev) => ({ ...prev, sourceImageSrc: src }));
   }, []);
 
-  /** Load a file as source: persist to IndexedDB first (no size limit), then set blob URL so refresh restores the image. */
   const setSourceImageFromFile = useCallback(async (file: File) => {
     await saveSourceImage(file);
     try {
@@ -145,47 +178,50 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     [],
   );
 
-  const updateDownsize = useCallback(
-    (params: Partial<DownsizeParams>) =>
-      setState((prev) => ({ ...prev, downsize: { ...prev.downsize, ...params } })),
-    [],
-  );
+  const updateDownsize = useCallback((params: Partial<DownsizeParams>) => {
+    startTransition(() => {
+      setState((prev) => ({ ...prev, downsize: { ...prev.downsize, ...params } }));
+    });
+  }, []);
 
-  const updateTone = useCallback(
-    (params: Partial<ToneParams>) =>
-      setState((prev) => ({ ...prev, tone: { ...prev.tone, ...params } })),
-    [],
-  );
+  const updateTone = useCallback((params: Partial<ToneParams>) => {
+    startTransition(() => {
+      setState((prev) => ({ ...prev, tone: { ...prev.tone, ...params } }));
+    });
+  }, []);
 
-  const updateToneVisible = useCallback(
-    (key: keyof ToneParams, visible: boolean) =>
+  const updateToneVisible = useCallback((key: keyof ToneParams, visible: boolean) => {
+    startTransition(() => {
       setState((prev) => ({
         ...prev,
         toneVisible: { ...prev.toneVisible, [key]: visible },
-      })),
-    [],
-  );
+      }));
+    });
+  }, []);
 
-  const resetTone = useCallback(
-    () =>
+  const resetTone = useCallback(() => {
+    startTransition(() => {
       setState((prev) => ({
         ...prev,
         tone: DEFAULT_TONE_PARAMS,
         toneVisible: DEFAULT_TONE_VISIBLE,
-      })),
-    [],
+      }));
+    });
+  }, []);
+
+  const updateDither = useCallback((params: Partial<DitherParams>) => {
+    startTransition(() => {
+      setState((prev) => ({ ...prev, dither: { ...prev.dither, ...params } }));
+    });
+  }, []);
+
+  const stateValue = useMemo<PipelineStateContextValue>(
+    () => ({ state, pipelineOutput }),
+    [state, pipelineOutput],
   );
 
-  const updateDither = useCallback(
-    (params: Partial<DitherParams>) =>
-      setState((prev) => ({ ...prev, dither: { ...prev.dither, ...params } })),
-    [],
-  );
-
-  const value = useMemo<PipelineContextType>(
+  const actionsValue = useMemo<PipelineActions>(
     () => ({
-      state,
-      pipelineOutput,
       setSourceImageSrc,
       setSourceImageFromFile,
       setActiveStage,
@@ -197,8 +233,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
       updateDither,
     }),
     [
-      state,
-      pipelineOutput,
       setSourceImageSrc,
       setSourceImageFromFile,
       setActiveStage,
@@ -211,15 +245,39 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     ],
   );
 
+  const metaValue = useMemo<PipelineMeta>(() => ({ isHydrated }), [isHydrated]);
+
   return (
-    <PipelineContext.Provider value={value}>
-      {children}
-    </PipelineContext.Provider>
+    <PipelineMetaContext.Provider value={metaValue}>
+      <PipelineActionsContext.Provider value={actionsValue}>
+        <PipelineStateContext.Provider value={stateValue}>
+          {children}
+        </PipelineStateContext.Provider>
+      </PipelineActionsContext.Provider>
+    </PipelineMetaContext.Provider>
   );
 };
 
-export const usePipeline = (): PipelineContextType => {
-  const ctx = useContext(PipelineContext);
-  if (!ctx) throw new Error("usePipeline must be used within PipelineProvider");
+export const usePipelineState = (): PipelineStateContextValue => {
+  const ctx = useContext(PipelineStateContext);
+  if (!ctx) throw new Error("usePipelineState must be used within PipelineProvider");
   return ctx;
+};
+
+export const usePipelineActions = (): PipelineActions => {
+  const ctx = useContext(PipelineActionsContext);
+  if (!ctx) throw new Error("usePipelineActions must be used within PipelineProvider");
+  return ctx;
+};
+
+export const usePipelineMeta = (): PipelineMeta => {
+  const ctx = useContext(PipelineMetaContext);
+  if (!ctx) throw new Error("usePipelineMeta must be used within PipelineProvider");
+  return ctx;
+};
+
+export const usePipeline = () => {
+  const { state, pipelineOutput } = usePipelineState();
+  const actions = usePipelineActions();
+  return { state, pipelineOutput, ...actions };
 };

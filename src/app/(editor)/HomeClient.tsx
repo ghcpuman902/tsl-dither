@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ProcessingWorkerProvider } from "@/lib/processing-worker-context";
 
 const EditorLayout = dynamic(
   () =>
@@ -21,8 +20,4 @@ const EditorLayout = dynamic(
   },
 );
 
-export const HomeClient = () => (
-  <ProcessingWorkerProvider>
-    <EditorLayout />
-  </ProcessingWorkerProvider>
-);
+export const HomeClient = () => <EditorLayout />;

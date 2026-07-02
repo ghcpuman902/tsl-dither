@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Download } from "lucide-react";
-import { usePipeline } from "@/lib/pipeline-context";
+import { usePipelineState } from "@/lib/pipeline-context";
 import { applyTone } from "@/lib/tone-processor";
 import { PipelineOutputFitCanvas } from "@/components/editor/PipelineOutputFitCanvas";
 import type { CanvasPreviewMode } from "@/lib/canvas-preview";
@@ -24,7 +24,7 @@ type ExportFormat = "png" | "jpeg" | "webp";
 const DEFAULT_EXPORT_QUALITY = 92;
 
 export const ExportStage = () => {
-  const { state, pipelineOutput } = usePipeline();
+  const { state, pipelineOutput } = usePipelineState();
   const [format, setFormat] = useState<ExportFormat>("png");
   const [quality, setQuality] = useState(DEFAULT_EXPORT_QUALITY);
   const [isExporting, setIsExporting] = useState(false);

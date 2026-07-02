@@ -67,8 +67,8 @@ export type DitherParams = {
 };
 
 export const DEFAULT_DITHER_PARAMS: DitherParams = {
-  method: "threshold",
-  threshold: 18,
+  method: "white-noise",
+  threshold: 40,
   density: 50,
   bayerSize: 4,
 };
@@ -89,10 +89,7 @@ export type PipelineOutput = {
   height: number;
 };
 
-export type PipelineContextType = {
-  state: PipelineState;
-  /** Current pipeline output (tone-adjusted or dithered). Written when a stage produces result; Export reads it. */
-  pipelineOutput: PipelineOutput | null;
+export type PipelineActions = {
   setSourceImageSrc: (src: string) => void;
   setSourceImageFromFile: (file: File) => Promise<void>;
   setActiveStage: (stage: StageId) => void;
@@ -103,6 +100,18 @@ export type PipelineContextType = {
   resetTone: () => void;
   updateDither: (params: Partial<DitherParams>) => void;
 };
+
+export type PipelineMeta = {
+  isHydrated: boolean;
+};
+
+export type PipelineStateContextValue = {
+  state: PipelineState;
+  pipelineOutput: PipelineOutput | null;
+};
+
+/** @deprecated Prefer usePipelineState + usePipelineActions */
+export type PipelineContextType = PipelineStateContextValue & PipelineActions;
 
 export type Stage = {
   id: StageId;
