@@ -20,8 +20,6 @@ import {
   ExportStagePanel,
 } from "./stage-panels";
 
-const PANEL_WIDTH = 288;
-
 const StagePanel = ({ sourceImageData }: { sourceImageData: ImageData | null }) => {
   const { state } = usePipelineState();
 
@@ -69,7 +67,7 @@ export const EditorLayout = () => {
     });
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-svh flex-col overflow-hidden bg-background">
       <PipelineNav />
 
       <div className="flex flex-1 overflow-hidden">
@@ -83,8 +81,7 @@ export const EditorLayout = () => {
         />
 
         <aside
-          className="flex flex-col overflow-y-auto border-l border-border bg-background"
-          style={{ width: PANEL_WIDTH }}
+          className="fixed inset-x-0 bottom-0 z-30 flex h-[var(--mobile-panel-h)] flex-col overflow-y-auto border-t border-border bg-background/95 backdrop-blur-sm md:static md:h-auto md:w-[288px] md:border-t-0 md:border-l md:bg-background md:backdrop-blur-none"
           aria-label="Stage controls"
         >
           <StagePanel sourceImageData={sourceImageData} />
