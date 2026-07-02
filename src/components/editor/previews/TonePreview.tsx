@@ -1,6 +1,7 @@
 "use client";
 
 import { PipelineOutputFitCanvas } from "@/components/editor/PipelineOutputFitCanvas";
+import { ZoomablePreviewFrame } from "@/components/editor/previews/ZoomablePreviewFrame";
 import type { PipelineOutput } from "@/lib/types";
 
 type TonePreviewProps = {
@@ -8,10 +9,10 @@ type TonePreviewProps = {
 };
 
 export const TonePreview = ({ pipelineOutput }: TonePreviewProps) => (
-  <div className="absolute inset-0">
+  <ZoomablePreviewFrame>
     <PipelineOutputFitCanvas
       pipelineOutput={pipelineOutput}
       aria-label="Tone preview: downsized and tone-adjusted frame"
     />
-  </div>
+  </ZoomablePreviewFrame>
 );

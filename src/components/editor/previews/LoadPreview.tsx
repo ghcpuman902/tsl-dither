@@ -1,6 +1,7 @@
 "use client";
 
 import { PreviewCanvas } from "@/components/editor/PreviewCanvas";
+import { ZoomablePreviewFrame } from "@/components/editor/previews/ZoomablePreviewFrame";
 
 type LoadPreviewProps = {
   onProcessed: (imageData: ImageData) => void;
@@ -17,6 +18,8 @@ export const LoadPreview = ({ onProcessed, isActive }: LoadPreviewProps) => (
     }}
     aria-hidden={!isActive}
   >
-    <PreviewCanvas onProcessed={onProcessed} />
+    <ZoomablePreviewFrame>
+      <PreviewCanvas onProcessed={onProcessed} />
+    </ZoomablePreviewFrame>
   </div>
 );
