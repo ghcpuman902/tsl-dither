@@ -18,7 +18,7 @@ export const PipelineNav = () => {
 
   return (
     <nav
-      className="flex h-11 shrink-0 items-center border-b border-border bg-background px-3 gap-0.5"
+      className="fixed inset-x-0 top-0 z-40 flex h-11 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border bg-background/90 px-3 backdrop-blur-sm scrollbar-thin-transparent md:static md:bg-background md:backdrop-blur-none"
       aria-label="Pipeline stages"
     >
       {PIPELINE_STAGES.map((stage, index) => (

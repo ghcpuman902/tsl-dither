@@ -25,7 +25,7 @@ export const PipelinePreview = ({
   processedImageData,
   pipelineOutput,
 }: PipelinePreviewProps) => (
-  <div className="relative flex-1 bg-black">
+  <div className="relative flex-1 min-h-0 bg-black">
     <LoadPreview onProcessed={onProcessed} isActive={activeStage === "load"} />
     {activeStage === "downsize" ? (
       <DownsizePreview pipelineOutput={downsizePreviewOutput} />

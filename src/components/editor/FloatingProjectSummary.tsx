@@ -40,5 +40,10 @@ That visual hunch is the reason the tool exists. The rest is just a controlled f
 };
 
 export const FloatingProjectSummary = () => {
-  return <FloatingInsightCard content={TSL_DITHER_INSIGHT} />;
+  return (
+    <FloatingInsightCard
+      content={TSL_DITHER_INSIGHT}
+      positionClassName="fixed left-4 top-[calc(var(--mobile-nav-h)+0.75rem)] z-40 md:left-4 md:top-auto md:bottom-4"
+    />
+  );
 };

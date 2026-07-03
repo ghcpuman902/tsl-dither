@@ -11,7 +11,7 @@ const EditorLayout = dynamic(
     ssr: false,
     loading: () => (
       <div
-        className="flex h-screen items-center justify-center bg-background"
+        className="flex h-svh items-center justify-center bg-background"
         aria-label="Loading editor"
       >
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />

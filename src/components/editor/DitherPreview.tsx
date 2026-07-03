@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { drawImageDataToCanvas, drawRgbaBufferToCanvas, type CanvasPreviewMode } from "@/lib/canvas-preview";
 import { drawDitherPreviewGpu } from "@/lib/gpu-dither-preview";
+import { ZoomablePreviewFrame } from "@/components/editor/previews/ZoomablePreviewFrame";
 import type { DitherParams } from "@/lib/types";
 
 type Props = {
@@ -44,7 +45,7 @@ const IncomingCell = ({ imageData }: { imageData: ImageData | null }) => {
 
   return (
     <div
-      className="absolute left-0 top-0 z-10 flex flex-col gap-0 opacity-100"
+      className="absolute left-0 top-[var(--mobile-nav-h)] z-10 flex flex-col gap-0 opacity-100 md:top-0"
       style={{ width: INCOMING_CSS, height: INCOMING_CSS + 24 }}
     >
       <Label className="shrink-0 text-xs font-medium text-muted-foreground mb-0 absolute left-0 top-0 z-11">
@@ -144,7 +145,7 @@ const DitherPreviewModeTabs = ({
   previewMode: CanvasPreviewMode;
   onPreviewModeChange: (mode: CanvasPreviewMode) => void;
 }) => (
-  <div className="absolute right-2 top-2 z-10">
+  <div className="absolute right-2 top-[calc(var(--mobile-nav-h)+0.5rem)] z-10 md:top-2">
     <div
       className="flex w-fit flex-wrap gap-1 rounded-lg border border-border bg-background/85 p-1 backdrop-blur-sm"
       role="tablist"
@@ -249,10 +250,12 @@ export const DitherPreview = ({ processedImageData }: Props) => {
           previewMode={previewMode}
           onPreviewModeChange={setPreviewMode}
         />
-        <DitherPreviewGrid
-          processedImageData={processedImageData}
-          ditherParams={state.dither}
-        />
+        <ZoomablePreviewFrame>
+          <DitherPreviewGrid
+            processedImageData={processedImageData}
+            ditherParams={state.dither}
+          />
+        </ZoomablePreviewFrame>
       </div>
     </DitherPreviewModeContext.Provider>
   );
