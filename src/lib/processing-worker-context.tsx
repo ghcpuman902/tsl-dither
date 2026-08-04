@@ -11,13 +11,6 @@ import type { DitherResult, HistogramData } from "./worker-types";
 type DownsizeResult = { buffer: ArrayBuffer; width: number; height: number } | null;
 type ToneResult = { buffer: ArrayBuffer; width: number; height: number } | null;
 
-type ProcessingWorkerResults = {
-  downsizeResult: DownsizeResult;
-  ditherResult: DitherResult | null;
-  histogramResult: HistogramData | null;
-  toneResult: ToneResult;
-};
-
 const ProcessingWorkerActionsContext = createContext<ProcessingWorkerActions | undefined>(undefined);
 const DownsizeResultContext = createContext<DownsizeResult | undefined>(undefined);
 const ToneResultContext = createContext<ToneResult | undefined>(undefined);

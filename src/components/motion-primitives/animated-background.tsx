@@ -7,7 +7,6 @@ import {
   cloneElement,
   type ReactElement,
   type ReactNode,
-  useEffect,
   useState,
   useId,
 } from "react";
@@ -31,22 +30,15 @@ export const AnimatedBackground = ({
   transition,
   enableHover = false,
 }: AnimatedBackgroundProps) => {
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(
+    () => defaultValue ?? null
+  );
   const uniqueId = useId();
 
   const handleSetActiveId = (id: string | null) => {
     setActiveId(id);
-
-    if (onValueChange) {
-      onValueChange(id);
-    }
+    onValueChange?.(id);
   };
-
-  useEffect(() => {
-    if (defaultValue !== undefined) {
-      setActiveId(defaultValue);
-    }
-  }, [defaultValue]);
 
   return Children.map(children, (child: ReactElement<Record<string, unknown>>, index) => {
     const id = child.props["data-id"] as string;

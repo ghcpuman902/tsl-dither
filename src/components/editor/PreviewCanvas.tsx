@@ -104,7 +104,7 @@ export const PreviewCanvas = ({ onProcessed }: Props) => {
         }
       }, HISTOGRAM_DEBOUNCE_MS);
     }
-  }, [loadedImg, onProcessed, state.sourceImageSrc]);
+  }, [loadedImg, onProcessed]);
 
   useEffect(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);

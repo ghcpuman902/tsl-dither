@@ -37,6 +37,11 @@ const SAMPLE_IMAGES: SampleImage[] = [
     src: "/samples/eiffel-tower.jpg",
     source: "Wikimedia Commons, public domain",
   },
+  {
+    label: "Saturated landscape",
+    src: "/samples/saturated-abstract-landscape.png",
+    source: "Local sample",
+  },
 ];
 
 export const LoadStage = () => {
