@@ -4,6 +4,7 @@ import { chromium } from "playwright";
 
 const run = async () => {
   const browser = await chromium.launch({
+    channel: "chrome",
     headless: true,
     args: ["--use-angle=swiftshader", "--disable-gpu-sandbox"],
   });
