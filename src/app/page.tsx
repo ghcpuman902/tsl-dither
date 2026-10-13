@@ -140,7 +140,7 @@ export default function LandingPage() {
             >
               <span className="text-sm font-medium text-primary">Live 3D dither</span>
               <span className="text-sm text-muted-foreground">
-                Side-lit sculpture and a photo relief. Animated white noise on each channel. Drag the light.
+                Side-lit sculpture and real photo depth (Depth Anything V2). Animated white noise on each channel. Drag the light.
               </span>
             </Link>
           </div>

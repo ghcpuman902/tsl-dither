@@ -14,6 +14,12 @@ import {
   vec4,
   viewportSize,
 } from "three/tsl";
+import { createDepthMesh } from "@/lib/depth/create-depth-mesh";
+import {
+  DEFAULT_DEPTH_MODEL,
+  getSharedDepthEstimator,
+  type DepthProgress,
+} from "@/lib/depth/depth-estimator";
 import type { LiveDitherSettings } from "./live-dither-types";
 
 export type LiveDitherSceneProps = {
@@ -113,7 +119,25 @@ const loadHtmlImage = (src: string) =>
     image.src = src;
   });
 
-const createReliefMesh = async (src: string): Promise<THREE.Mesh> => {
+const formatDepthProgress = (progress: DepthProgress): string => {
+  if (progress.phase === "loading-model") {
+    if (progress.totalBytes && progress.loadedBytes != null) {
+      const pct = Math.min(
+        100,
+        Math.round((progress.loadedBytes / progress.totalBytes) * 100),
+      );
+      return `Loading ${DEFAULT_DEPTH_MODEL.label}… ${pct}%`;
+    }
+    return `Loading ${DEFAULT_DEPTH_MODEL.label}…`;
+  }
+  if (progress.phase === "estimating") {
+    return "Estimating depth…";
+  }
+  return `Depth ready · ${Math.round(progress.inferenceMs)}ms · ${progress.device}`;
+};
+
+/** Brightness fallback only if ONNX depth fails — not the default path. */
+const createBrightnessReliefMesh = async (src: string): Promise<THREE.Mesh> => {
   const image = await loadHtmlImage(src);
   const sampleWidth = 80;
   const sampleHeight = 106;
@@ -139,9 +163,9 @@ const createReliefMesh = async (src: string): Promise<THREE.Mesh> => {
     for (let column = 0; column < sampleWidth; column++) {
       const vertex = row * sampleWidth + column;
       const pixel = vertex * 4;
-      const red = pixels[pixel] / 255;
-      const green = pixels[pixel + 1] / 255;
-      const blue = pixels[pixel + 2] / 255;
+      const red = pixels[pixel]! / 255;
+      const green = pixels[pixel + 1]! / 255;
+      const blue = pixels[pixel + 2]! / 255;
       const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
       positions.setZ(vertex, (luminance - 0.35) * 0.72);
     }
@@ -158,6 +182,30 @@ const createReliefMesh = async (src: string): Promise<THREE.Mesh> => {
     metalness: 0,
   });
   return new THREE.Mesh(geometry, material);
+};
+
+const createPhotoDepthMesh = async (
+  src: string,
+  onProgress: (status: string) => void,
+  signal: AbortSignal,
+): Promise<{ mesh: THREE.Mesh; status: string }> => {
+  const image = await loadHtmlImage(src);
+  if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+
+  const estimator = getSharedDepthEstimator();
+  const estimate = await estimator.estimate(image, {
+    signal,
+    onProgress: (progress) => onProgress(formatDepthProgress(progress)),
+  });
+
+  const mesh = createDepthMesh(
+    image,
+    estimate.depth,
+    estimate.width,
+    estimate.height,
+  );
+  const status = `Depth · ${DEFAULT_DEPTH_MODEL.id} · ${Math.round(estimate.inferenceMs)}ms · ${estimate.device}`;
+  return { mesh, status };
 };
 
 const buildWhiteNoiseNode = (sceneTexture: THREE.Texture, uniforms: DitherUniforms) => {
@@ -210,7 +258,7 @@ export const LiveDitherScene = ({
   const onLightDegreesRef = useRef(onLightDegrees);
   const onStatusRef = useRef(onStatus);
   const onErrorRef = useRef(onError);
-  const rebuildPhotoRef = useRef<(url: string) => void>(() => {});
+  const ensurePhotoRef = useRef<(url: string, force?: boolean) => void>(() => {});
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -221,8 +269,9 @@ export const LiveDitherScene = ({
   });
 
   useEffect(() => {
-    rebuildPhotoRef.current(photoUrl);
-  }, [photoUrl]);
+    if (settings.subject !== "photo") return;
+    ensurePhotoRef.current(photoUrl);
+  }, [photoUrl, settings.subject]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -287,10 +336,29 @@ export const LiveDitherScene = ({
       return 1.08;
     };
 
+    let photoAbort: AbortController | null = null;
+    let photoRequestId = 0;
+    let builtPhotoUrl: string | null = null;
+
     const rebuildPhoto = async (url: string) => {
+      photoAbort?.abort();
+      const controller = new AbortController();
+      photoAbort = controller;
+      const requestId = ++photoRequestId;
+      onStatusRef.current(`Loading ${DEFAULT_DEPTH_MODEL.label}…`);
+      onErrorRef.current(null);
+
       try {
-        const mesh = await createReliefMesh(url);
-        if (disposed) {
+        const { mesh, status } = await createPhotoDepthMesh(
+          url,
+          (progressStatus) => {
+            if (requestId === photoRequestId) {
+              onStatusRef.current(progressStatus);
+            }
+          },
+          controller.signal,
+        );
+        if (disposed || requestId !== photoRequestId) {
           disposeObject(mesh);
           return;
         }
@@ -299,16 +367,51 @@ export const LiveDitherScene = ({
           disposeObject(child);
         }
         photoGroup.add(mesh);
+        builtPhotoUrl = url;
+        onStatusRef.current(status);
         onErrorRef.current(null);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Photo relief failed";
-        onErrorRef.current(message);
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        ) {
+          return;
+        }
+        console.warn("[LiveDither] ONNX depth failed, using brightness relief:", error);
+        try {
+          const mesh = await createBrightnessReliefMesh(url);
+          if (disposed || requestId !== photoRequestId) {
+            disposeObject(mesh);
+            return;
+          }
+          for (const child of [...photoGroup.children]) {
+            photoGroup.remove(child);
+            disposeObject(child);
+          }
+          photoGroup.add(mesh);
+          builtPhotoUrl = url;
+          const detail = error instanceof Error ? error.message : "depth failed";
+          onStatusRef.current(`Brightness fallback · ${detail}`);
+          onErrorRef.current(null);
+        } catch (fallbackError) {
+          const message =
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : "Photo depth failed";
+          onErrorRef.current(message);
+          onStatusRef.current("error");
+        }
       }
     };
-    rebuildPhotoRef.current = (url: string) => {
+    ensurePhotoRef.current = (url: string, force = false) => {
+      if (!force && builtPhotoUrl === url && photoGroup.children.length > 0) {
+        return;
+      }
       void rebuildPhoto(url);
     };
-    rebuildPhotoRef.current(photoUrlRef.current);
+    if (settingsRef.current.subject === "photo") {
+      ensurePhotoRef.current(photoUrlRef.current, true);
+    }
 
     const resize = () => {
       if (!renderer) return;
@@ -464,6 +567,7 @@ export const LiveDitherScene = ({
 
     return () => {
       disposed = true;
+      photoAbort?.abort();
       container.removeEventListener("pointerdown", handlePointerDown);
       container.removeEventListener("pointermove", handlePointerMove);
       container.removeEventListener("pointerup", handlePointerUp);
