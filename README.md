@@ -43,11 +43,21 @@ and WebGL/GLSL). The original intent was a GPU shader-heavy pipeline, but this
 build does **not** ship a WebGPU path. The shipped pipeline prioritizes
 main-thread responsiveness via Web Worker-based CPU processing.
 
+## Apps
+
+The home page is a grid of separate apps:
+
+- **V1 — Flat 2D** (`/v1`): the current staged editor (load → downsize → tone →
+  dither → export).
+- **V2 — Layers** (`/v2`): in-browser SegFormer into sky / cloud / foreground,
+  single-colour sky lightness gradient + Bayer, white-noise on foreground.
+  See [ROADMAP.md](ROADMAP.md).
+- **3D / TSL** (`/3d`): WebGPU post-process lab.
+
 ## Next Stage
 
-Apply the same white-noise dither as a post-process pass on 3D scenes, where a
-GPU/TSL path is a better fit because inputs already live on the GPU and
-per-frame cost matters.
+See [ROADMAP.md](ROADMAP.md). Next is per-label tone presets once the first-pass
+look locks in on the saturated landscape sample.
 
 ## Getting Started
 
@@ -103,7 +113,8 @@ Included for demo/public deployment:
 
 After deploy, verify:
 
-- `/` loads the editor
+- `/` loads the app grid
+- `/v1` loads the flat 2D editor
 - `/robots.txt` and `/sitemap.xml` are reachable
 - `/opengraph-image` renders the social preview card
 

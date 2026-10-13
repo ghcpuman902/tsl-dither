@@ -57,7 +57,12 @@ describe("tone and dither brightness", () => {
 
   it("threshold dithering at 50% tracks linear midpoint", () => {
     const img = createGradient(256, 1);
-    const params: DitherParams = { method: "threshold", threshold: 50, density: 0, bayerSize: 4 };
+    const params: DitherParams = {
+      method: "threshold",
+      threshold: 50,
+      opacity: 0,
+      bayerSize: 4,
+    };
     const out = applyDither(img, params);
     let switchedAt = -1;
     for (let x = 0; x < 256; x++) {
@@ -72,15 +77,20 @@ describe("tone and dither brightness", () => {
     expect(switchedAt).toBeLessThanOrEqual(190);
   });
 
-  it("white-noise dithering remains deterministic", () => {
+  it("threshold with opacity remains deterministic", () => {
     const img = createGradient(128, 1);
-    const params: DitherParams = { method: "white-noise", threshold: 50, density: 35, bayerSize: 4 };
+    const params: DitherParams = {
+      method: "threshold",
+      threshold: 50,
+      opacity: 35,
+      bayerSize: 4,
+    };
     const a = applyDither(img, params);
     const b = applyDither(img, params);
     expect(a.data).toEqual(b.data);
   });
 
-  it("white-noise uses independent seeds per RGB channel", () => {
+  it("threshold opacity uses independent seeds per RGB channel", () => {
     const size = 32;
     const data = new Uint8ClampedArray(size * size * 4);
     for (let i = 0; i < data.length; i += 4) {
@@ -90,7 +100,12 @@ describe("tone and dither brightness", () => {
       data[i + 3] = 255;
     }
     const img = new ImageData(data, size, size);
-    const params: DitherParams = { method: "white-noise", threshold: 50, density: 100, bayerSize: 4 };
+    const params: DitherParams = {
+      method: "threshold",
+      threshold: 50,
+      opacity: 100,
+      bayerSize: 4,
+    };
     const out = applyDither(img, params);
     let chromaticPixels = 0;
     for (let i = 0; i < out.data.length; i += 4) {

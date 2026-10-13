@@ -54,23 +54,58 @@ export const DEFAULT_TONE_VISIBLE: ToneVisible = {
   temperature: true,
 };
 
-export type DitherMethod =
-  | "threshold"
-  | "white-noise"
-  | "bayer";
+export type DitherMethod = "threshold" | "bayer";
 
 export type DitherParams = {
   method: DitherMethod;
-  threshold: number;   // 0–100 binary cut for threshold method
-  density: number;     // 0–100 for white noise
-  bayerSize: number;   // precomputed matrix size for Bayer (e.g. 2, 4, 8)
+  threshold: number; // 0–100 binary cutoff
+  /** White-noise influence 0–100. 0 = pure threshold; higher = grainier. */
+  opacity: number;
+  bayerSize: number; // precomputed matrix size for Bayer (e.g. 2, 4, 8)
 };
 
 export const DEFAULT_DITHER_PARAMS: DitherParams = {
-  method: "white-noise",
+  method: "threshold",
   threshold: 40,
-  density: 50,
+  opacity: 50,
   bayerSize: 4,
+};
+
+/** Normalize persisted / legacy dither params (white-noise → threshold, density → opacity). */
+export const normalizeDitherParams = (
+  raw: Partial<DitherParams> & {
+    method?: string;
+    density?: number;
+  } = {},
+): DitherParams => {
+  const method: DitherMethod =
+    raw.method === "bayer"
+      ? "bayer"
+      : raw.method === "threshold" ||
+          raw.method === "white-noise" ||
+          raw.method == null
+        ? "threshold"
+        : DEFAULT_DITHER_PARAMS.method;
+
+  const opacity =
+    typeof raw.opacity === "number"
+      ? raw.opacity
+      : typeof raw.density === "number"
+        ? raw.density
+        : DEFAULT_DITHER_PARAMS.opacity;
+
+  return {
+    method,
+    threshold:
+      typeof raw.threshold === "number"
+        ? raw.threshold
+        : DEFAULT_DITHER_PARAMS.threshold,
+    opacity,
+    bayerSize:
+      typeof raw.bayerSize === "number"
+        ? raw.bayerSize
+        : DEFAULT_DITHER_PARAMS.bayerSize,
+  };
 };
 
 export type PipelineState = {

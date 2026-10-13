@@ -24,26 +24,23 @@ const seededRandom = (seed: number, index: number): number => {
   return (t & 0x7fffff) / 0x800000;
 };
 
-const binaryThresholdLinear = (encodedByte: number, threshold01: number): number => {
-  const linearValue = SRGB_TO_LINEAR_LUT[encodedByte];
-  return linearValue >= threshold01 ? 255 : 0;
-};
-
 /**
- * White noise: threshold with a random offset per pixel so density increases
- * how much the cutoff varies (density 0 = pure threshold, higher = noisier).
- * threshold01 = base cutoff; density 0–100 scales (random - 0.5) added to threshold.
+ * Threshold with optional white-noise: opacity 0 = pure cutoff; higher opacity
+ * scales (random − 0.5) added to the threshold.
  */
-const whiteNoiseBinaryLinear = (
+const thresholdWithOpacityLinear = (
   encodedByte: number,
   threshold01: number,
-  density01: number,
+  opacity01: number,
   pixelIndex: number,
-  seed: number
+  seed: number,
 ): number => {
-  const r = seededRandom(seed, pixelIndex);
-  const noise = (r - 0.5) * density01;
-  const t = Math.max(0, Math.min(1, threshold01 + noise));
+  let t = threshold01;
+  if (opacity01 > 0) {
+    const r = seededRandom(seed, pixelIndex);
+    const noise = (r - 0.5) * opacity01;
+    t = Math.max(0, Math.min(1, threshold01 + noise));
+  }
   const linearValue = SRGB_TO_LINEAR_LUT[encodedByte];
   return linearValue >= t ? 255 : 0;
 };
@@ -85,7 +82,7 @@ const bayerDitherChannel = (
   channelOffset: number,
   width: number,
   height: number,
-  bayerSize: number
+  bayerSize: number,
 ): void => {
   const n = normalizeBayerSize(bayerSize);
   const matrix = getBayerMatrix(n);
@@ -106,44 +103,30 @@ const bayerDitherChannel = (
 };
 
 /**
- * Point-wise binary dither (threshold, white noise) on a single channel.
+ * Point-wise binary dither (threshold + optional white-noise opacity) on a single channel.
  */
 const pointDitherChannel = (
   src: Uint8ClampedArray,
   out: Uint8ClampedArray,
   channelOffset: number,
   params: DitherParams,
-  method: DitherMethod,
   width: number,
-  height: number
+  height: number,
 ): void => {
   const threshold01 = params.threshold / 100;
-  const density01 = params.density / 100;
+  const opacity01 = params.opacity / 100;
   const n = width * height;
+  const seed = NOISE_SEED_BY_CHANNEL[channelOffset] ?? NOISE_SEED_R;
 
   for (let i = 0; i < n; i++) {
     const idx = i * 4 + channelOffset;
-    const v = src[idx];
-    let outVal: number;
-
-    switch (method) {
-      case "threshold":
-        outVal = binaryThresholdLinear(v, threshold01);
-        break;
-      case "white-noise":
-        outVal = whiteNoiseBinaryLinear(
-          v,
-          threshold01,
-          density01,
-          i,
-          NOISE_SEED_BY_CHANNEL[channelOffset] ?? NOISE_SEED_R
-        );
-        break;
-      default:
-        outVal = binaryThresholdLinear(v, threshold01);
-    }
-
-    out[idx] = outVal;
+    out[idx] = thresholdWithOpacityLinear(
+      src[idx],
+      threshold01,
+      opacity01,
+      i,
+      seed,
+    );
   }
 };
 
@@ -156,7 +139,9 @@ export const applyDither = (imageData: ImageData, params: DitherParams): ImageDa
   const out = new Uint8ClampedArray(src.length);
   out.set(src);
 
-  const method = params.method;
+  const method: DitherMethod =
+    params.method === "bayer" ? "bayer" : "threshold";
+
   if (method === "bayer") {
     bayerDitherChannel(src, out, 0, width, height, params.bayerSize);
     bayerDitherChannel(src, out, 1, width, height, params.bayerSize);
@@ -164,8 +149,8 @@ export const applyDither = (imageData: ImageData, params: DitherParams): ImageDa
     return new ImageData(out, width, height);
   }
 
-  pointDitherChannel(src, out, 0, params, method, width, height);
-  pointDitherChannel(src, out, 1, params, method, width, height);
-  pointDitherChannel(src, out, 2, params, method, width, height);
+  pointDitherChannel(src, out, 0, params, width, height);
+  pointDitherChannel(src, out, 1, params, width, height);
+  pointDitherChannel(src, out, 2, params, width, height);
   return new ImageData(out, width, height);
 };
