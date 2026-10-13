@@ -24,14 +24,82 @@ const DEFAULT_SETTINGS: LiveDitherSettings = {
   pixelSize: 3,
 };
 
+const capturePhotoFromCamera = async (): Promise<Blob> => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Camera is unavailable in this browser");
+  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: "environment" } },
+    audio: false,
+  });
+  try {
+    const video = document.createElement("video");
+    video.playsInline = true;
+    video.muted = true;
+    video.srcObject = stream;
+    await video.play();
+    // Wait for a decoded frame.
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      await new Promise<void>((resolve, reject) => {
+        const onReady = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("Camera preview failed"));
+        };
+        const cleanup = () => {
+          video.removeEventListener("loadeddata", onReady);
+          video.removeEventListener("error", onError);
+        };
+        video.addEventListener("loadeddata", onReady, { once: true });
+        video.addEventListener("error", onError, { once: true });
+      });
+    }
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not capture a camera frame");
+    context.drawImage(video, 0, 0, width, height);
+    video.pause();
+    video.srcObject = null;
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (value) => {
+          if (value) resolve(value);
+          else reject(new Error("Could not encode the camera frame"));
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
+    return blob;
+  } finally {
+    for (const track of stream.getTracks()) track.stop();
+  }
+};
+
 export const LiveDitherClient = () => {
   const [settings, setSettings] = useState<LiveDitherSettings>(DEFAULT_SETTINGS);
   const [photoUrl, setPhotoUrl] = useState("/samples/statue-of-liberty.jpg");
   const [lightDegrees, setLightDegrees] = useState(64);
   const [status, setStatus] = useState("starting");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cameraBusy, setCameraBusy] = useState(false);
   const blobUrlRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const adoptPhotoBlob = (blob: Blob) => {
+    if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    const url = URL.createObjectURL(blob);
+    blobUrlRef.current = url;
+    setPhotoUrl(url);
+    setSettings((current) => ({ ...current, subject: "photo" }));
+  };
 
   const handleSubject = (subject: LiveSubject) => {
     setSettings((current) => ({ ...current, subject }));
@@ -40,12 +108,25 @@ export const LiveDitherClient = () => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
-    const url = URL.createObjectURL(file);
-    blobUrlRef.current = url;
-    setPhotoUrl(url);
-    setSettings((current) => ({ ...current, subject: "photo" }));
+    adoptPhotoBlob(file);
     event.target.value = "";
+  };
+
+  const handleTakePhoto = async () => {
+    setCameraBusy(true);
+    setErrorMessage(null);
+    setStatus("Opening camera…");
+    try {
+      const blob = await capturePhotoFromCamera();
+      adoptPhotoBlob(blob);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Camera capture failed";
+      setErrorMessage(message);
+      setStatus("error");
+    } finally {
+      setCameraBusy(false);
+    }
   };
 
   const handleNudgeLight = () => {
@@ -74,7 +155,9 @@ export const LiveDitherClient = () => {
             </Link>
             <h1 className="text-base font-medium">Live dither</h1>
             <p className="max-w-sm text-xs text-muted-foreground">
-              Hard side light, then independent white noise on R, G, and B before each channel is thresholded. Drag to move the light. Noise loops at 18 fps.
+              Hard side light, then independent white noise on R, G, and B before each
+              channel is thresholded. Photos run Depth Anything V2 once into a coloured
+              mesh. Drag to move the light. Noise loops at 18 fps.
             </p>
           </div>
           <p
@@ -114,7 +197,7 @@ export const LiveDitherClient = () => {
                 data-testid="photo-mode"
                 onClick={() => handleSubject("photo")}
               >
-                Photo relief
+                Photo depth
               </button>
             </div>
 
@@ -167,8 +250,22 @@ export const LiveDitherClient = () => {
 
             <button
               type="button"
+              className="rounded-md border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              data-testid="take-photo"
+              aria-label="Take a photo for depth"
+              disabled={cameraBusy}
+              onClick={() => {
+                void handleTakePhoto();
+              }}
+            >
+              {cameraBusy ? "Capturing…" : "Take photo"}
+            </button>
+
+            <button
+              type="button"
               className="rounded-md border border-border px-3 py-1.5 text-xs hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Upload a photo to relight"
+              aria-label="Upload a photo for depth"
+              data-testid="upload-photo"
               onClick={() => fileInputRef.current?.click()}
             >
               Upload photo
@@ -177,6 +274,7 @@ export const LiveDitherClient = () => {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               className="hidden"
               tabIndex={-1}
               aria-label="Photo file input"
