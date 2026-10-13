@@ -74,7 +74,8 @@ const APPS: AppCard[] = [
 export default function LandingPage() {
   return (
     <main className="flex min-h-svh flex-col bg-background px-6 py-12 md:px-10 md:py-16">
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-10">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 md:flex-row md:items-stretch">
+        <div className="flex min-w-0 flex-1 flex-col justify-center gap-10">
         <header className="max-w-2xl">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
             {siteConfig.name}
@@ -120,6 +121,30 @@ export default function LandingPage() {
             </li>
           ))}
         </ul>
+        </div>
+
+        <aside
+          className="flex w-full shrink-0 flex-col border-t border-border pt-6 md:w-60 md:border-t-0 md:border-l md:pt-2 md:pl-6"
+          aria-label="More experiments"
+        >
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            More
+          </p>
+          <div className="mt-auto pt-10">
+            <Link
+              href="/live"
+              data-testid="live-dither-link"
+              className="flex flex-col gap-1 rounded-lg border border-border p-4 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Open the live 3D dither demo"
+              tabIndex={0}
+            >
+              <span className="text-sm font-medium text-primary">Live 3D dither</span>
+              <span className="text-sm text-muted-foreground">
+                Side-lit sculpture and a photo relief. Animated white noise on each channel. Drag the light.
+              </span>
+            </Link>
+          </div>
+        </aside>
       </div>
     </main>
   );

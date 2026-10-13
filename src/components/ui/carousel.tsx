@@ -52,6 +52,8 @@ const subscribeToScrollState = (
   api: CarouselApi,
   onStoreChange: () => void
 ) => {
+  if (!api) return () => {}
+
   const handler = () => onStoreChange()
   api.on("init", handler)
   api.on("reInit", handler)
