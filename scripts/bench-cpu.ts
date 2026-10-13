@@ -45,9 +45,9 @@ const TONE_PARAMS: ToneParams = {
 };
 
 const DITHER_PARAMS: DitherParams[] = [
-  { method: "threshold", threshold: 50, density: 0, bayerSize: 4 },
-  { method: "white-noise", threshold: 48, density: 35, bayerSize: 4 },
-  { method: "bayer", threshold: 50, density: 0, bayerSize: 8 },
+  { method: "threshold", threshold: 50, opacity: 0, bayerSize: 4 },
+  { method: "threshold", threshold: 48, opacity: 35, bayerSize: 4 },
+  { method: "bayer", threshold: 50, opacity: 0, bayerSize: 8 },
 ];
 
 const makeImageData = (width: number, height: number): ImageData => {

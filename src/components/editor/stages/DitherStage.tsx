@@ -4,20 +4,17 @@ import { usePipelineActions, usePipelineState } from "@/lib/pipeline-context";
 import type { DitherMethod } from "@/lib/types";
 import { AnimatedSegmentedControl } from "@/components/ui/animated-segmented-control";
 import { ThresholdControls } from "./dither/ThresholdControls";
-import { WhiteNoiseControls } from "./dither/WhiteNoiseControls";
+import { OpacityControls } from "./dither/OpacityControls";
 import { BayerControls } from "./dither/BayerControls";
 
 const DITHER_METHODS: { id: DitherMethod; label: string }[] = [
   { id: "threshold", label: "Threshold" },
-  { id: "white-noise", label: "White noise" },
   { id: "bayer", label: "Bayer" },
 ];
 
 const INTROS: Record<DitherMethod, string> = {
   threshold:
-    "Binary cutoff per channel: each R, G, B is 255 if at or above the threshold, else 0. Combined they give up to 8 colors.",
-  "white-noise":
-    "Randomized binary per channel: the cutoff is perturbed by noise so the result is grainier. Density controls how strong the noise is.",
+    "Binary cutoff per channel. Opacity adds white-noise sway to the cutoff — 0 is a hard threshold, higher values get grainier.",
   bayer:
     "Ordered dither using a Bayer threshold matrix (2×2, 4×4, or 8×8). Larger matrices yield finer patterns; each channel is quantized independently.",
 };
@@ -25,7 +22,7 @@ const INTROS: Record<DitherMethod, string> = {
 export const DitherStage = () => {
   const { state } = usePipelineState();
   const { updateDither } = usePipelineActions();
-  const { method, threshold, density, bayerSize } = state.dither;
+  const { method, threshold, opacity, bayerSize } = state.dither;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -50,16 +47,16 @@ export const DitherStage = () => {
 
       <div className="flex flex-col gap-4">
         {method === "threshold" ? (
-          <ThresholdControls
-            threshold={threshold}
-            onThresholdChange={(next) => updateDither({ threshold: next })}
-          />
-        ) : null}
-        {method === "white-noise" ? (
-          <WhiteNoiseControls
-            density={density}
-            onDensityChange={(next) => updateDither({ density: next })}
-          />
+          <>
+            <ThresholdControls
+              threshold={threshold}
+              onThresholdChange={(next) => updateDither({ threshold: next })}
+            />
+            <OpacityControls
+              opacity={opacity}
+              onOpacityChange={(next) => updateDither({ opacity: next })}
+            />
+          </>
         ) : null}
         {method === "bayer" ? (
           <BayerControls

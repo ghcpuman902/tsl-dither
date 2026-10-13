@@ -25,6 +25,7 @@ import {
   DEFAULT_TONE_PARAMS,
   DEFAULT_TONE_VISIBLE,
   DEFAULT_DITHER_PARAMS,
+  normalizeDitherParams,
 } from "./types";
 import {
   saveSourceImage,
@@ -69,7 +70,7 @@ const normalizePipelineState = (parsed: Partial<PipelineState>): PipelineState =
     downsize: { ...DEFAULT_DOWNSIZE_PARAMS, ...(parsed.downsize ?? {}) },
     tone: { ...DEFAULT_TONE_PARAMS, ...(parsed.tone ?? {}) },
     toneVisible: { ...DEFAULT_TONE_VISIBLE, ...(parsed.toneVisible ?? {}) },
-    dither: { ...DEFAULT_DITHER_PARAMS, ...(parsed.dither ?? {}) },
+    dither: normalizeDitherParams(parsed.dither ?? {}),
   };
 };
 

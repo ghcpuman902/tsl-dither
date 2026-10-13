@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
-import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, LayoutGrid } from "lucide-react";
 import { usePipelineActions, usePipelineState } from "@/lib/pipeline-context";
 import { PIPELINE_STAGES, type StageId } from "@/lib/types";
 import { preloadAdjacentStages, preloadStagePanel } from "@/components/editor/stage-panels";
@@ -21,6 +22,19 @@ export const PipelineNav = () => {
       className="fixed inset-x-0 top-0 z-40 flex h-11 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border bg-background/90 px-3 backdrop-blur-sm scrollbar-thin-transparent md:static md:bg-background md:backdrop-blur-none"
       aria-label="Pipeline stages"
     >
+      <Link
+        href="/"
+        className="mr-1 flex shrink-0 items-center gap-1.5 rounded px-2.5 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Back to apps"
+        tabIndex={0}
+      >
+        <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+        Apps
+      </Link>
+      <span
+        className="mr-1 h-4 w-px shrink-0 bg-border"
+        aria-hidden="true"
+      />
       {PIPELINE_STAGES.map((stage, index) => (
         <div key={stage.id} className="flex items-center gap-0.5">
           {index > 0 ? (

@@ -14,7 +14,7 @@ type GpuContext = {
     pos: number;
     uTex: WebGLUniformLocation | null;
     uThreshold: WebGLUniformLocation | null;
-    uDensity: WebGLUniformLocation | null;
+    uOpacity: WebGLUniformLocation | null;
     uMode: WebGLUniformLocation | null;
     uChannel: WebGLUniformLocation | null;
     uBayerSize: WebGLUniformLocation | null;
@@ -97,8 +97,8 @@ const createContext = (canvas: HTMLCanvasElement): GpuContext | null => {
      out vec4 outColor;
      uniform sampler2D uTex;
      uniform float uThreshold;
-     uniform float uDensity;
-     uniform float uMode; // 0 threshold, 1 white-noise, 2 bayer
+     uniform float uOpacity;
+     uniform float uMode; // 0 threshold (+ optional noise), 1 bayer
      uniform float uChannel; // 0 rgb, 1 r, 2 g, 3 b
      uniform float uBayerSize;
      uniform vec2 uViewport;
@@ -141,13 +141,12 @@ const createContext = (canvas: HTMLCanvasElement): GpuContext | null => {
        vec3 s = texture(uTex, vUv).rgb;
        vec3 lin = vec3(srgbToLinear(s.r), srgbToLinear(s.g), srgbToLinear(s.b));
        vec3 t = vec3(uThreshold);
-       if (uMode > 0.5 && uMode < 1.5) {
+       if (uMode < 0.5) {
          float noiseR = hash(gl_FragCoord.xy + vec2(12345.0, 0.0)) - 0.5;
          float noiseG = hash(gl_FragCoord.xy + vec2(23456.0, 0.0)) - 0.5;
          float noiseB = hash(gl_FragCoord.xy + vec2(34567.0, 0.0)) - 0.5;
-         t = clamp(vec3(uThreshold) + vec3(noiseR, noiseG, noiseB) * uDensity, 0.0, 1.0);
-       }
-       if (uMode > 1.5) {
+         t = clamp(vec3(uThreshold) + vec3(noiseR, noiseG, noiseB) * uOpacity, 0.0, 1.0);
+       } else {
          float b = bayer(gl_FragCoord.xy, uBayerSize);
          t = vec3(b);
        }
@@ -193,7 +192,7 @@ const createContext = (canvas: HTMLCanvasElement): GpuContext | null => {
       pos,
       uTex: gl.getUniformLocation(program, "uTex"),
       uThreshold: gl.getUniformLocation(program, "uThreshold"),
-      uDensity: gl.getUniformLocation(program, "uDensity"),
+      uOpacity: gl.getUniformLocation(program, "uOpacity"),
       uMode: gl.getUniformLocation(program, "uMode"),
       uChannel: gl.getUniformLocation(program, "uChannel"),
       uBayerSize: gl.getUniformLocation(program, "uBayerSize"),
@@ -203,9 +202,7 @@ const createContext = (canvas: HTMLCanvasElement): GpuContext | null => {
 };
 
 const methodToMode = (method: DitherParams["method"]): number => {
-  if (method === "threshold") return 0;
-  if (method === "white-noise") return 1;
-  return 2;
+  return method === "bayer" ? 1 : 0;
 };
 
 const channelToValue = (channel: Channel): number => {
@@ -256,7 +253,7 @@ export const drawDitherPreviewGpu = (
   );
   gl.uniform1i(locs.uTex, 0);
   gl.uniform1f(locs.uThreshold, params.threshold / 100);
-  gl.uniform1f(locs.uDensity, params.density / 100);
+  gl.uniform1f(locs.uOpacity, params.opacity / 100);
   gl.uniform1f(locs.uMode, methodToMode(params.method));
   gl.uniform1f(locs.uChannel, channelToValue(channel));
   gl.uniform1f(locs.uBayerSize, params.bayerSize <= 2 ? 2 : params.bayerSize <= 4 ? 4 : 8);
